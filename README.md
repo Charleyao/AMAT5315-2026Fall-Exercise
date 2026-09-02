@@ -44,3 +44,9 @@ python -m pytest week1 -q
 ```
 
 Drop `-q` to see more detailed output.
+
+## Week 1 test result
+
+![Screenshot of the Week 1 pytest run showing a green "1 passed" summary](pytest-green.png)
+
+The Week 1 pytest test passes.

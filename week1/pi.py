@@ -9,4 +9,4 @@ def estimate_pi(n, seed):
         y = rng.random()
         if x * x + y * y <= 1:
             inside += 1
-    return 1.0 * inside / n
+    return 4.0 * inside / n

@@ -71,3 +71,33 @@ fn check_missing_dir_fails() {
         .expect("failed to run md check");
     assert!(!out.status.success());
 }
+
+#[test]
+fn video_renders_mp4_when_ffmpeg_present() {
+    if Command::new("ffmpeg").arg("-version").output().is_err() {
+        eprintln!("ffmpeg not installed; skipping video encode test");
+        return;
+    }
+    let dir = std::env::temp_dir().join("md_video_test");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let run = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args([
+            "run", "--n", "36", "--eq-steps", "0", "--steps", "50",
+            "--sample-every", "50", "--out", dir.to_str().unwrap(),
+        ])
+        .status()
+        .expect("failed to run md run");
+    assert!(run.success());
+
+    let out = dir.join("run.mp4");
+    let video = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args(["video", dir.to_str().unwrap(), "--out", out.to_str().unwrap()])
+        .status()
+        .expect("failed to run md video");
+    assert!(video.success());
+
+    let size = std::fs::metadata(&out).unwrap().len();
+    assert!(size < 2_000_000, "video too large: {size} bytes");
+    let _ = std::fs::remove_dir_all(&dir);
+}

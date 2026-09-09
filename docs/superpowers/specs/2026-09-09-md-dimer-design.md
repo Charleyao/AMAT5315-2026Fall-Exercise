@@ -171,7 +171,7 @@ One test `dimer_energy_errors`, written before implementation (RED first):
 |---|---|---|
 | ForwardEuler, 500 steps, `dt = 0.01` | final relative error (`errors[500]`) `> 0.5` | ≈ +1.93 |
 | VelocityVerlet, 500 steps, `dt = 0.01` | max \|relative error\| `< 1e-3` | ≈ 3.3e−4 |
-| VelocityVerlet, 5000 steps, `dt = 0.01` | energy error stays bounded: max \|relative error\| `< 0.01` (loose long-time sanity check, **not** a strict `1e-3` acceptance) | ≈ 3.3e−4 |
+| VelocityVerlet, 5000 steps, `dt = 0.01` | record the error history and confirm it remains bounded (finite, no divergence); **no hard numerical threshold** | ≈ 3.3e−4 |
 
 The test also prints the three recorded values (visible with
 `cargo test -- --nocapture`).

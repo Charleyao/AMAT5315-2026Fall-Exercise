@@ -299,6 +299,11 @@ pub mod cli;
 pub mod io;
 pub mod video;
 
+pub use simulation::{build_lattice, gaussian_velocities, run_simulation, RunConfig};
+pub use io::{read_output, write_output, RunMeta, SimulationOutput, TrajFrame};
+pub use check::{check, CheckReport};
+pub use video::{render_video, VideoReport};
+
 
 #[cfg(test)]
 mod tests {

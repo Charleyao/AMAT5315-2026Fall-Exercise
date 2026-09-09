@@ -32,3 +32,26 @@ N = 400 workload (0.1758 s vs 0.7631 s).
 
 Profiler evidence: `profile-naive.png` (3,773 samples) and `profile-cells.png`
 (886 samples), both flame graphs rendered from the samply profiles.
+
+## Benchmark
+
+Scaling of `md run` at fixed density (rho = 0.8), `--force naive` vs
+`--force cells`: wall time of the full run (release build, `--steps 500`,
+`--eq-steps 100`, all other defaults unchanged), 3 runs each.
+`speedup = naive median / cells median`.
+
+| N | Naive (s) | Cells (s) | Speedup |
+| ---: | ---: | ---: | ---: |
+| 100 | 0.0397 (0.0392–0.0406) | 0.0266 (0.0265–0.0270) | 1.50 |
+| 400 | 0.5542 (0.5534–0.5867) | 0.1227 (0.0980–0.1243) | 4.52 |
+| 1600 | 8.4077 (8.2445–8.5603) | 0.3879 (0.3808–0.4008) | 21.68 |
+
+Median and min–max range are shown. Speedup grows with N and reaches ~22× at
+N = 1600. The two curves in `scaling.png` (seconds per step vs N, log–log)
+have different slopes because the naive path searches all O(N²) pairs, while
+the cell-list path keeps the candidate count per atom bounded at fixed density
+and cutoff. Reproduce with:
+
+```sh
+python3 benchmark_scaling.py   # needs matplotlib for scaling.png
+```

@@ -36,3 +36,38 @@ fn cli_run_writes_readable_json() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn default_run_and_check_pass_physics_limits() {
+    // The contract: default run -> md check exits 0 (all physics limits pass).
+    let dir = std::env::temp_dir().join("md_contract_test");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let run = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args(["run", "--out", dir.to_str().unwrap()])
+        .status()
+        .expect("failed to run md run");
+    assert!(run.success());
+
+    let check = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args(["check", dir.to_str().unwrap()])
+        .output()
+        .expect("failed to run md check");
+    assert!(
+        check.status.success(),
+        "md check failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_missing_dir_fails() {
+    let out = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args(["check", "/nonexistent/md_dir"])
+        .output()
+        .expect("failed to run md check");
+    assert!(!out.status.success());
+}

@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Week 2 — molecular dynamics: four views of one trajectory</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171d2b;
+    --panel2: #1e2637;
+    --ink: #e8edf6;
+    --muted: #93a1b8;
+    --line: #2c3650;
+    --accent: #6ea8ff;
+    --good: #56d364;
+    --warn: #f0b849;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 14px 22px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 1.15rem; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: .85rem; }
+  header .src { margin-left: auto; color: var(--muted); font-size: .8rem;
+    font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: repeat(2, minmax(360px, 1fr));
+    gap: 16px; padding: 16px 22px; align-items: stretch; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; min-width: 0;
+    display: flex; flex-direction: column; }
+  .card h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  canvas { display: block; width: 100%; height: clamp(280px, 35vw, 600px);
+    flex: 1 0 auto; background: var(--panel2);
+    border-radius: 6px; touch-action: none; }
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    flex-wrap: wrap; }
+  button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #06101f; border-color: var(--accent);
+    font-weight: 650; }
+  input[type=range] { accent-color: var(--accent); }
+  label.ctl { display: flex; align-items: center; gap: 6px; color: var(--muted);
+    font-size: .82rem; white-space: nowrap; }
+  .frameline { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .frameline input[type=range] { flex: 1; }
+  .frameline .fpos { color: var(--muted); font-size: .8rem;
+    font-variant-numeric: tabular-nums; min-width: 120px; text-align: right; }
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 14px;
+    margin-top: 10px; }
+  .ro { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; }
+  .ro .k { color: var(--muted); font-size: .7rem; text-transform: uppercase;
+    letter-spacing: .04em; }
+  .ro .v { font-size: 1.02rem; font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .tctl { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .tctl input[type=range] { flex: 1; min-width: 120px; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .72rem;
+    border: 1px solid var(--line); color: var(--muted); }
+  .tag.auto { color: var(--good); border-color: var(--good); }
+  .tag.manual { color: var(--warn); border-color: var(--warn); }
+  #drop { position: fixed; inset: 0; background: rgba(9,13,22,.92);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+    border: 3px dashed var(--accent); border-radius: 12px; margin: 14px; }
+  #drop.show { display: flex; }
+  #drop .msg { font-size: 1.3rem; color: var(--accent); }
+  .empty { grid-column: 1 / -1; text-align: center; padding: 46px 20px;
+    border: 2px dashed var(--line); border-radius: 12px; color: var(--muted);
+    background: var(--panel); }
+  .empty h3 { color: var(--ink); font-size: 1.1rem; margin: 0 0 8px; }
+  .empty code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; }
+  .empty .picker { margin-top: 16px; }
+  .note { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .reading { color: var(--ink); font-size: .82rem; margin-top: 8px;
+    font-variant-numeric: tabular-nums; }
+  .legend { display: flex; align-items: center; gap: 8px; color: var(--muted);
+    font-size: .76rem; margin-top: 6px; }
+  .legend .bar { height: 9px; width: 120px; border-radius: 3px;
+    background: linear-gradient(90deg, #3a76d8, #56c2c9, #f0c04a, #e8663a); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Week 2 — molecular dynamics: four views of one trajectory</h1>
+  <span class="sub">2D Lennard-Jones argon · reduced units (k<sub>B</sub>=m=1)</span>
+  <span class="src" id="src">no data</span>
+  <button id="loadfiles" hidden>load run.json…</button>
+</header>
+
+<main id="main">
+  <!-- populated by JS -->
+</main>
+
+<!-- fullscreen drop overlay -->
+<div id="drop"><div class="msg">drop traj.jsonl (and run.json) to load</div></div>
+
+<!-- hidden file input -->
+<input id="file" type="file" accept=".jsonl,.json,application/json,text/plain" multiple style="display:none">
+
+<template id="tpl-app">
+  <section class="card">
+    <h2>Particles — colored by speed</h2>
+    <canvas id="boxcv" width="720" height="720" role="img"
+      aria-label="Animated particle positions in the periodic simulation box"></canvas>
+    <div class="legend"><span>slow</span><span class="bar"></span><span>fast</span>
+      <span style="margin-left:auto">periodic box shown to scale</span></div>
+    <div class="controls">
+      <button id="play" class="primary">▶ play</button>
+      <label class="ctl">fps
+        <input id="fps" type="range" min="1" max="60" value="20" style="width:110px">
+        <span id="fpsval" style="min-width:34px;font-variant-numeric:tabular-nums">20</span></label>
+      <label class="ctl"><input id="loop" type="checkbox" checked> loop</label>
+      <button id="savepng" title="download this frame with its readouts stamped (s)" disabled>⬇ save PNG</button>
+    </div>
+    <div class="frameline">
+      <input id="scrub" type="range" min="0" max="0" value="0">
+      <span class="fpos" id="fpos">frame 0 / 0</span>
+    </div>
+    <div class="readouts">
+      <div class="ro"><div class="k">step</div><div class="v" id="ro-step">–</div></div>
+      <div class="ro"><div class="k">time t</div><div class="v" id="ro-t">–</div></div>
+      <div class="ro"><div class="k">T measured (window)</div><div class="v" id="ro-T">–</div></div>
+      <div class="ro"><div class="k">E potential</div><div class="v" id="ro-ep">–</div></div>
+      <div class="ro"><div class="k">E kinetic</div><div class="v" id="ro-ek">–</div></div>
+      <div class="ro"><div class="k">E total</div><div class="v" id="ro-et">–</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Speed histogram vs 2D Maxwell–Boltzmann</h2>
+    <canvas id="histcv" width="720" height="360" role="img"
+      aria-label="Measured speed histogram and Maxwell-Boltzmann reference curve"></canvas>
+    <div class="tctl">
+      <span class="tag" id="ttag">auto</span>
+      <label class="ctl" style="flex:1">curve T
+        <input id="tslider" type="range" min="0" max="100" value="0" style="flex:1">
+      </label>
+      <span id="tval" style="font-variant-numeric:tabular-nums;min-width:74px">T = –</span>
+      <button id="tauto">auto</button>
+    </div>
+    <div class="reading" id="hist-reading">χ²/dof = –</div>
+    <div class="note">Bars pool the last 20 frames. The curve predicts the full speed
+      distribution from one measured number, T. A χ²/dof near 1 means the remaining
+      mismatch has the size expected from sampling noise. Move the temperature slider:
+      a wrong T moves the curve and raises χ²/dof.</div>
+  </section>
+
+  <section class="card">
+    <h2>Pair structure g(r)</h2>
+    <canvas id="grcv" width="720" height="360" role="img"
+      aria-label="Initial and current radial distribution functions"></canvas>
+    <div class="reading" id="gr-reading">long-range contrast = –</div>
+    <div class="note">Repeated peaks far from the first neighbour shell show crystalline
+      order. During melting those peaks shrink and g(r) approaches 1. The long-range
+      contrast is the root-mean-square distance from 1 beyond r = 2.</div>
+  </section>
+
+  <section class="card">
+    <h2>Temperature and relative energy through time</h2>
+    <canvas id="timecv" width="720" height="340" role="img"
+      aria-label="Temperature and relative total-energy traces over the full run"></canvas>
+    <div class="reading" id="time-reading">T = – · ΔE/|E₀| = –</div>
+    <div class="note">For the contract run, bounded energy error supports the integrator
+      claim. For a temperature ramp, rising energy is intentional: velocity rescaling
+      adds energy while the structure plot records the resulting loss of order.</div>
+  </section>
+</template>
+
+<script>
+"use strict";
+(function () {
+  // ---------- speed -> color (blue slow .. warm fast), perceptual-ish ----------
+  const STOPS = [
+    [0.00, [58, 118, 216]],   // blue
+    [0.35, [86, 194, 201]],   // teal
+    [0.70, [240, 192, 74]],   // amber
+    [1.00, [232, 102, 58]],   // warm red
+  ];
+  function speedColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    for (let i = 1; i < STOPS.length; i++) {
+      if (t <= STOPS[i][0]) {
+        const [a, ca] = STOPS[i - 1], [b, cb] = STOPS[i];
+        const u = (t - a) / (b - a || 1);
+        const r = Math.round(ca[0] + u * (cb[0] - ca[0]));
+        const g = Math.round(ca[1] + u * (cb[1] - ca[1]));
+        const bl = Math.round(ca[2] + u * (cb[2] - ca[2]));
+        return "rgb(" + r + "," + g + "," + bl + ")";
+      }
+    }
+    return "rgb(232,102,58)";
+  }
+
+  // ---------- JSONL parsing ----------
+  function parseJSONL(text) {
+    const frames = [];
+    const lines = text.split(/\r?\n/);
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;               // skip blank lines
+      let obj;
+      try { obj = JSON.parse(line); }
+      catch (e) { continue; }            // skip malformed lines robustly
+      if (obj && obj.pos) frames.push(obj);
+    }
+    return frames;
+  }
+
+  // ---------- model state ----------
+  const M = {
+    frames: [],       // raw frame objects
+    speeds: [],       // per-frame Float64Array of |v|
+    temperature: [],  // per-frame <v^2>/2
+    etot: [],         // per-frame E_total
+    tArr: [],         // per-frame t
+    box: null,        // [Lx, Ly]
+    run: null,        // run.json object (may be null)
+    n: 0,
+    globalVmax: 1,    // for color scaling
+    grCache: [], grBins: 48, grRmax: 1,
+    window: 20,       // trailing frames for histogram/T
+    // playback
+    cur: 0, playing: false, fps: 20,
+    lastTick: 0,
+    // T overlay
+    tMode: "auto", tManual: 0.5, tSliderMax: 2.0,
+  };
+  const SRCFILE = { name: "–", size: 0 };   // what was loaded, stamped into the proof PNG
+
+  // ---------- ingest ----------
+  function ingest(frames, run) {
+    if (!frames.length) { alert("No frames parsed from traj.jsonl."); return; }
+    M.frames = frames;
+    M.run = run || null;
+    document.getElementById("loadfiles").hidden = M.run !== null;
+    M.n = frames[0].pos.length;
+
+    // precompute per-frame speeds, energies, times
+    M.speeds = new Array(frames.length);
+    M.temperature = new Array(frames.length);
+    M.etot = new Array(frames.length);
+    M.tArr = new Array(frames.length);
+    M.grCache = new Array(frames.length);
+    let vmaxSq = 0;
+    let maxx = 0, maxy = 0;
+    for (let f = 0; f < frames.length; f++) {
+      const fr = frames[f];
+      const vel = fr.vel || [];
+      const sp = new Float64Array(vel.length);
+      let frameS2 = 0;
+      for (let i = 0; i < vel.length; i++) {
+        const vx = vel[i][0], vy = vel[i][1];
+        const s2 = vx * vx + vy * vy;
+        frameS2 += s2;
+        sp[i] = Math.sqrt(s2);
+        if (s2 > vmaxSq) vmaxSq = s2;
+      }
+      M.speeds[f] = sp;
+      M.temperature[f] = sp.length ? frameS2 / (2 * sp.length) : 0;
+      const ep = (typeof fr.E_pot === "number") ? fr.E_pot : 0;
+      const ek = (typeof fr.E_kin === "number") ? fr.E_kin : 0;
+      const et = ep + ek;
+      M.etot[f] = et;
+      M.tArr[f] = (typeof fr.t === "number") ? fr.t : f;
+      for (const p of fr.pos) { if (p[0] > maxx) maxx = p[0]; if (p[1] > maxy) maxy = p[1]; }
+    }
+    M.globalVmax = Math.sqrt(vmaxSq) || 1;
+    // box: prefer run.json, else infer from position extents
+    if (run && Array.isArray(run.box) && run.box.length === 2) {
+      M.box = [run.box[0], run.box[1]];
+    } else {
+      M.box = [Math.ceil(maxx * 1.02), Math.ceil(maxy * 1.02)];
+    }
+    M.grRmax = Math.min(M.box[0], M.box[1]) / 2;
+
+    // T slider range ~ 4x a rough estimate of the true T
+    const midSp = M.speeds[Math.floor(frames.length / 2)];
+    let s2 = 0; for (const s of midSp) s2 += s * s;
+    const Test = (midSp.length ? s2 / midSp.length : 1) / 2;
+    M.tSliderMax = Math.max(0.2, Test * 4);
+    M.tManual = Test;
+
+    buildUI();
+    render(true);
+  }
+
+  // ---------- windowed statistics ----------
+  function windowRange(cur) {
+    const lo = Math.max(0, cur - M.window + 1);
+    return [lo, cur];
+  }
+  function windowSpeeds(cur) {
+    const [lo, hi] = windowRange(cur);
+    const out = [];
+    for (let f = lo; f <= hi; f++) { const sp = M.speeds[f]; for (let i = 0; i < sp.length; i++) out.push(sp[i]); }
+    return out;
+  }
+  function windowTmeasured(cur) {
+    const [lo, hi] = windowRange(cur);
+    let s2 = 0, n = 0;
+    for (let f = lo; f <= hi; f++) { const sp = M.speeds[f]; for (let i = 0; i < sp.length; i++) { s2 += sp[i] * sp[i]; n++; } }
+    return n ? (s2 / n) / 2 : 0;      // 2D: <v^2>/2 = T
+  }
+
+  function rayleighChi2(speeds, T, fitted) {
+    const nb = 24, counts = new Uint32Array(nb);
+    for (const speed of speeds) {
+      const p = 1 - Math.exp(-(speed * speed) / (2 * T));
+      counts[Math.min(nb - 1, Math.floor(p * nb))]++;
+    }
+    const expected = speeds.length / nb;
+    let chi2 = 0;
+    for (const count of counts) chi2 += (count - expected) ** 2 / expected;
+    return chi2 / (nb - (fitted ? 2 : 1));
+  }
+
+  function frameGr(index) {
+    if (M.grCache[index]) return M.grCache[index];
+    const bins = new Float64Array(M.grBins);
+    const pos = M.frames[index].pos;
+    const [Lx, Ly] = M.box;
+    const dr = M.grRmax / M.grBins;
+    for (let i = 0; i < pos.length - 1; i++) {
+      for (let j = i + 1; j < pos.length; j++) {
+        let dx = pos[i][0] - pos[j][0], dy = pos[i][1] - pos[j][1];
+        dx -= Lx * Math.round(dx / Lx);
+        dy -= Ly * Math.round(dy / Ly);
+        const r = Math.hypot(dx, dy);
+        if (r < M.grRmax) bins[Math.floor(r / dr)]++;
+      }
+    }
+    const rho = M.n / (Lx * Ly);
+    for (let b = 0; b < bins.length; b++) {
+      const r1 = b * dr, r2 = (b + 1) * dr;
+      bins[b] /= rho * Math.PI * (r2 * r2 - r1 * r1) * M.n / 2;
+    }
+    M.grCache[index] = bins;
+    return bins;
+  }
+
+  function averageGr(lo, hi) {
+    const out = new Float64Array(M.grBins);
+    for (let f = lo; f <= hi; f++) {
+      const gr = frameGr(f);
+      for (let b = 0; b < out.length; b++) out[b] += gr[b];
+    }
+    const count = hi - lo + 1;
+    for (let b = 0; b < out.length; b++) out[b] /= count;
+    return out;
+  }
+
+  // ---------- UI wiring ----------
+  let els = {};
+  function buildUI() {
+    const main = document.getElementById("main");
+    main.innerHTML = "";
+    const tpl = document.getElementById("tpl-app").content.cloneNode(true);
+    main.appendChild(tpl);
+
+    els = {
+      boxcv: document.getElementById("boxcv"),
+      histcv: document.getElementById("histcv"),
+      grcv: document.getElementById("grcv"),
+      timecv: document.getElementById("timecv"),
+      histReading: document.getElementById("hist-reading"),
+      grReading: document.getElementById("gr-reading"),
+      timeReading: document.getElementById("time-reading"),
+      play: document.getElementById("play"),
+      fps: document.getElementById("fps"),
+      fpsval: document.getElementById("fpsval"),
+      loop: document.getElementById("loop"),
+      savepng: document.getElementById("savepng"),
+      scrub: document.getElementById("scrub"),
+      fpos: document.getElementById("fpos"),
+      tslider: document.getElementById("tslider"),
+      tval: document.getElementById("tval"),
+      ttag: document.getElementById("ttag"),
+      tauto: document.getElementById("tauto"),
+      roStep: document.getElementById("ro-step"),
+      roT: document.getElementById("ro-t"),
+      roTemp: document.getElementById("ro-T"),
+      roEp: document.getElementById("ro-ep"),
+      roEk: document.getElementById("ro-ek"),
+      roEt: document.getElementById("ro-et"),
+    };
+
+    const N = M.frames.length;
+    els.scrub.max = String(N - 1);
+    els.scrub.value = "0";
+    M.cur = 0;
+
+    els.play.onclick = () => setPlaying(!M.playing);
+    els.fps.oninput = () => { M.fps = +els.fps.value; els.fpsval.textContent = els.fps.value; };
+    els.scrub.oninput = () => { M.cur = +els.scrub.value; setPlaying(false); render(); };
+    els.savepng.disabled = false;              // a run is loaded, so the proof is composable
+    els.savepng.onclick = savePNG;
+
+    // T slider: default (0) = auto; moving it engages manual
+    els.tslider.oninput = () => {
+      const frac = +els.tslider.value / 100;
+      M.tManual = Math.max(0.001, frac * M.tSliderMax);
+      M.tMode = (+els.tslider.value === 0) ? "auto" : "manual";
+      render();
+    };
+    els.tauto.onclick = () => { M.tMode = "auto"; els.tslider.value = "0"; render(); };
+
+    // update src label
+    const src = document.getElementById("src");
+    const boxTxt = "box " + M.box[0].toFixed(1) + "×" + M.box[1].toFixed(1);
+    src.textContent = M.n + " atoms · " + N + " frames · " + boxTxt +
+      (M.run ? " · run.json ✓" : " · box inferred");
+
+    sizeCanvases();
+  }
+
+  function setPlaying(on) {
+    M.playing = on;
+    if (els.play) els.play.textContent = on ? "❚❚ pause" : "▶ play";
+    if (on) { M.lastTick = performance.now(); requestAnimationFrame(loop); }
+  }
+
+  function loop(now) {
+    if (!M.playing) return;
+    const dt = now - M.lastTick;
+    if (dt >= 1000 / M.fps) {
+      M.lastTick = now;
+      M.cur++;
+      if (M.cur >= M.frames.length) {
+        if (els.loop.checked) M.cur = 0;
+        else { M.cur = M.frames.length - 1; setPlaying(false); render(); return; }
+      }
+      els.scrub.value = String(M.cur);
+      render();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // keep canvas backing store crisp
+  function sizeCanvases() {
+    for (const cv of [els.boxcv, els.histcv, els.grcv, els.timecv]) {
+      const rect = cv.getBoundingClientRect();
+      const dpr = window.devicePixelRatio;
+      cv.width = Math.round(rect.width * dpr);
+      cv.height = Math.round(rect.height * dpr);
+    }
+  }
+
+  // ---------- rendering ----------
+  function render(forceResize) {
+    if (!M.frames.length) return;
+    if (forceResize) sizeCanvases();
+    drawBox();
+    drawHist();
+    drawGr();
+    drawTimeline();
+    updateReadouts();
+    updateFrameLabel();
+  }
+
+  function updateFrameLabel() {
+    els.fpos.textContent = "frame " + M.cur + " / " + (M.frames.length - 1);
+  }
+
+  function updateReadouts() {
+    const fr = M.frames[M.cur];
+    const Tm = windowTmeasured(M.cur);
+    els.roStep.textContent = (fr.step != null) ? fr.step : "–";
+    els.roT.textContent = (typeof fr.t === "number") ? fr.t.toFixed(3) : "–";
+    els.roTemp.textContent = Tm.toFixed(4);
+    const ep = (typeof fr.E_pot === "number") ? fr.E_pot : null;
+    const ek = (typeof fr.E_kin === "number") ? fr.E_kin : null;
+    els.roEp.textContent = ep == null ? "–" : ep.toFixed(3);
+    els.roEk.textContent = ek == null ? "–" : ek.toFixed(3);
+    els.roEt.textContent = (ep == null && ek == null) ? "–" : ((ep || 0) + (ek || 0)).toFixed(3);
+    // T slider tag/value
+    const curT = (M.tMode === "auto") ? Tm : M.tManual;
+    els.tval.textContent = "T = " + curT.toFixed(3);
+    els.ttag.textContent = M.tMode;
+    els.ttag.className = "tag " + M.tMode;
+  }
+
+  function drawBox() {
+    const cv = els.boxcv, ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const pad = 14;
+    const [Lx, Ly] = M.box;
+    const scale = Math.min((W - 2 * pad) / Lx, (H - 2 * pad) / Ly);
+    const ox = (W - Lx * scale) / 2, oy = (H - Ly * scale) / 2;
+    // flip y so physics-up is screen-up
+    const sx = x => ox + x * scale;
+    const sy = y => oy + (Ly - y) * scale;
+
+    // box outline (periodic edges)
+    ctx.strokeStyle = "#4a597a";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]);
+    ctx.strokeRect(ox, oy, Lx * scale, Ly * scale);
+    ctx.setLineDash([]);
+
+    const fr = M.frames[M.cur], sp = M.speeds[M.cur];
+    const vmax = M.globalVmax;
+    // atom radius: ~0.5 sigma (reduced) in box units -> px
+    const rpx = Math.max(1.5, 0.5 * scale);
+    for (let i = 0; i < fr.pos.length; i++) {
+      // wrap into box in case of tiny numerical drift outside
+      let x = fr.pos[i][0], y = fr.pos[i][1];
+      x = ((x % Lx) + Lx) % Lx; y = ((y % Ly) + Ly) % Ly;
+      ctx.fillStyle = speedColor(sp[i] / vmax);
+      ctx.beginPath();
+      ctx.arc(sx(x), sy(y), rpx, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+
+  function drawHist() {
+    const cv = els.histcv, ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const padL = 44 * (window.devicePixelRatio || 1), padR = 12, padT = 12, padB = 30 * (window.devicePixelRatio || 1);
+    const speeds = windowSpeeds(M.cur);
+    if (!speeds.length) return;
+    const Tm = windowTmeasured(M.cur);
+    const curT = (M.tMode === "auto") ? Tm : M.tManual;
+    const chi2dof = rayleighChi2(speeds, curT, M.tMode === "auto");
+    els.histReading.textContent = "χ²/dof = " + chi2dof.toFixed(2) +
+      " · measured T = " + Tm.toFixed(3) + " · curve T = " + curT.toFixed(3);
+
+    // x range: 0 .. a bit past where curve dies (~4 sqrt(T)) or observed max
+    let smax = 0; for (const s of speeds) if (s > smax) smax = s;
+    const xhi = Math.max(smax * 1.05, 4 * Math.sqrt(Math.max(Tm, curT, 1e-6)));
+    const nb = 26;
+    const bins = new Float64Array(nb);
+    for (const s of speeds) { let b = Math.floor(s / xhi * nb); if (b >= nb) b = nb - 1; if (b < 0) b = 0; bins[b]++; }
+    const bw = xhi / nb;
+    // density normalize: total area = 1
+    for (let b = 0; b < nb; b++) bins[b] = bins[b] / speeds.length / bw;
+
+    // curve samples
+    const curve = [];
+    let cmax = 0;
+    for (let k = 0; k <= 120; k++) {
+      const v = k / 120 * xhi;
+      const fval = (v / curT) * Math.exp(-v * v / (2 * curT));
+      curve.push([v, fval]);
+      if (fval > cmax) cmax = fval;
+    }
+    let ymax = cmax;
+    for (const b of bins) if (b > ymax) ymax = b;
+    ymax *= 1.12;
+
+    const PX = x => padL + x / xhi * (W - padL - padR);
+    const PY = y => H - padB - y / ymax * (H - padT - padB);
+
+    // axes
+    ctx.strokeStyle = "#3a4660";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+
+    // bars
+    for (let b = 0; b < nb; b++) {
+      const x0 = PX(b * bw), x1 = PX((b + 1) * bw);
+      const y0 = PY(0), y1 = PY(bins[b]);
+      ctx.fillStyle = "rgba(110,168,255,0.42)";
+      ctx.fillRect(x0 + 0.5, y1, Math.max(1, x1 - x0 - 1), y0 - y1);
+    }
+
+    // Maxwell-Boltzmann (Rayleigh) curve
+    ctx.strokeStyle = (M.tMode === "auto") ? "#56d364" : "#f0b849";
+    ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+    ctx.beginPath();
+    curve.forEach(([v, fv], i) => { const X = PX(v), Y = PY(fv); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = "#93a1b8";
+    ctx.font = (12 * (window.devicePixelRatio || 1)) + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("speed |v|", (padL + W - padR) / 2, H - 8 * (window.devicePixelRatio || 1));
+    ctx.save();
+    ctx.translate(12 * (window.devicePixelRatio || 1), (padT + H - padB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("density", 0, 0);
+    ctx.restore();
+    // x ticks
+    ctx.textAlign = "center";
+    for (let t = 0; t <= 4; t++) {
+      const v = t / 4 * xhi;
+      ctx.fillText(v.toFixed(1), PX(v), H - padB + 14 * (window.devicePixelRatio || 1));
+    }
+    // curve T label
+    ctx.textAlign = "right";
+    ctx.fillStyle = (M.tMode === "auto") ? "#56d364" : "#f0b849";
+    ctx.fillText((M.tMode === "auto" ? "auto  T=" : "manual  T=") + curT.toFixed(3),
+      W - padR - 4, padT + 12 * (window.devicePixelRatio || 1));
+  }
+
+  function drawGr() {
+    const cv = els.grcv, ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const dpr = window.devicePixelRatio || 1;
+    const padL = 44 * dpr, padR = 12 * dpr, padT = 12 * dpr, padB = 30 * dpr;
+    const initialHi = Math.min(9, M.frames.length - 1);
+    const currentLo = Math.max(0, M.cur - 9);
+    const initial = averageGr(0, initialHi);
+    const current = averageGr(currentLo, M.cur);
+    let ymax = 1.2;
+    for (const values of [initial, current]) for (const value of values) ymax = Math.max(ymax, value);
+    ymax = Math.min(8, ymax * 1.08);
+    const PX = r => padL + r / M.grRmax * (W - padL - padR);
+    const PY = g => H - padB - g / ymax * (H - padT - padB);
+
+    ctx.strokeStyle = "#3a4660"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.beginPath(); ctx.moveTo(padL, PY(1)); ctx.lineTo(W - padR, PY(1)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function line(values, color, width) {
+      ctx.strokeStyle = color; ctx.lineWidth = width * dpr; ctx.beginPath();
+      for (let b = 0; b < values.length; b++) {
+        const x = PX((b + 0.5) * M.grRmax / M.grBins), y = PY(values[b]);
+        b ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+    line(initial, "#6ea8ff", 1.5);
+    line(current, "#f0b849", 2);
+
+    ctx.fillStyle = "#93a1b8"; ctx.font = (11 * dpr) + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("pair distance r", (padL + W - padR) / 2, H - 8 * dpr);
+    for (let t = 0; t <= 4; t++) {
+      const r = t * M.grRmax / 4;
+      ctx.fillText(r.toFixed(1), PX(r), H - padB + 15 * dpr);
+    }
+    ctx.textAlign = "left"; ctx.fillStyle = "#6ea8ff";
+    ctx.fillText("initial 10 frames", padL + 8 * dpr, padT + 14 * dpr);
+    ctx.fillStyle = "#f0b849";
+    ctx.fillText("current 10-frame window", padL + 8 * dpr, padT + 30 * dpr);
+
+    let sum = 0, count = 0;
+    const dr = M.grRmax / M.grBins;
+    for (let b = 0; b < current.length; b++) {
+      if ((b + 0.5) * dr < 2) continue;
+      sum += (current[b] - 1) ** 2; count++;
+    }
+    els.grReading.textContent = "long-range contrast = " + Math.sqrt(sum / Math.max(1, count)).toFixed(3) +
+      " · current window frames " + currentLo + "–" + M.cur;
+  }
+
+  function drawTimeline() {
+    const cv = els.timecv, ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const dpr = window.devicePixelRatio || 1;
+    const padL = 52 * dpr, padR = 12 * dpr, padT = 12 * dpr, padB = 26 * dpr;
+    const gap = 24 * dpr;
+    const panelH = (H - padT - padB - gap) / 2;
+    const N = M.frames.length;
+    const PX = i => padL + i / Math.max(1, N - 1) * (W - padL - padR);
+    const e0 = M.etot[0] || 1;
+    const relE = M.etot.map(e => (e - e0) / Math.abs(e0));
+
+    function extent(values) {
+      let lo = Infinity, hi = -Infinity;
+      for (const value of values) { lo = Math.min(lo, value); hi = Math.max(hi, value); }
+      const span = hi - lo || Math.max(1e-6, Math.abs(lo) * 0.1);
+      return [lo - 0.08 * span, hi + 0.08 * span];
+    }
+    function panel(values, top, color, label, reference) {
+      const referenceValues = reference == null ? [] :
+        (typeof reference === "number" ? [reference] : reference);
+      const [lo, hi] = extent(values.concat(referenceValues));
+      const PY = value => top + panelH - (value - lo) / (hi - lo) * panelH;
+      ctx.strokeStyle = "#3a4660"; ctx.lineWidth = 1;
+      ctx.strokeRect(padL, top, W - padL - padR, panelH);
+      if (reference != null) {
+        ctx.setLineDash([4 * dpr, 4 * dpr]);
+        ctx.beginPath();
+        if (typeof reference === "number") {
+          ctx.moveTo(padL, PY(reference)); ctx.lineTo(W - padR, PY(reference));
+        } else {
+          for (let i = 0; i < reference.length; i++) {
+            const x = PX(i), y = PY(reference[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = 1.7 * dpr; ctx.beginPath();
+      for (let i = 0; i < values.length; i++) {
+        const x = PX(i), y = PY(values[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#f0b849"; ctx.beginPath();
+      ctx.arc(PX(M.cur), PY(values[M.cur]), 3 * dpr, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#93a1b8"; ctx.font = (10 * dpr) + "px system-ui, sans-serif";
+      ctx.textAlign = "right"; ctx.fillText(hi.toExponential(2), padL - 5 * dpr, top + 9 * dpr);
+      ctx.fillText(lo.toExponential(2), padL - 5 * dpr, top + panelH);
+      ctx.save(); ctx.translate(13 * dpr, top + panelH / 2); ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center"; ctx.fillText(label, 0, 0); ctx.restore();
+    }
+
+    let targetT = null;
+    if (M.run && typeof M.run.temperature === "number") {
+      targetT = M.run.temperature;
+      if (typeof M.run.ramp_to === "number") {
+        targetT = M.temperature.map((_, i) => M.run.temperature +
+          (M.run.ramp_to - M.run.temperature) * i / Math.max(1, N - 1));
+      }
+    }
+    panel(M.temperature, padT, "#56d364", "T", targetT);
+    panel(relE, padT + panelH + gap, "#6ea8ff", "ΔE/|E₀|", 0);
+    ctx.fillStyle = "#93a1b8"; ctx.font = (11 * dpr) + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("time", (padL + W - padR) / 2, H - 7 * dpr);
+    ctx.strokeStyle = "#f0b849"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PX(M.cur), padT); ctx.lineTo(PX(M.cur), H - padB); ctx.stroke();
+
+    els.timeReading.textContent = "T = " + M.temperature[M.cur].toFixed(3) +
+      " · ΔE/|E₀| = " + relE[M.cur].toExponential(2) +
+      " · t = " + M.tArr[M.cur].toFixed(2);
+  }
+
+  // ---------- proof PNG ----------
+  // One image that carries the whole evidence: all four panels plus a caption stamped
+  // with the readouts exactly as the page shows them. Exposed as window.composeProofPNG()
+  // so a headless browser can grab the same image.
+  const fmtSize = b => b ? (b < 1048576 ? Math.round(b / 1024) + " KB" : (b / 1048576).toFixed(1) + " MB")
+                         : "size unknown";
+  const frameKey = () => "frame" + M.cur;
+
+  function proofLines() {
+    const fr = M.frames[M.cur];
+    const ep = (typeof fr.E_pot === "number") ? fr.E_pot : null;
+    const ek = (typeof fr.E_kin === "number") ? fr.E_kin : null;
+    const num = (v, d) => v == null ? "–" : v.toFixed(d);
+    return [
+      "frame " + M.cur + " / " + (M.frames.length - 1) +
+        "   ·   step " + (fr.step != null ? fr.step : "–") +
+        "   ·   t = " + (typeof fr.t === "number" ? fr.t.toFixed(3) : "–") +
+        "   ·   T measured (window) = " + windowTmeasured(M.cur).toFixed(4),
+      "E potential = " + num(ep, 3) + "   ·   E kinetic = " + num(ek, 3) +
+        "   ·   E total = " + ((ep == null && ek == null) ? "–" : ((ep || 0) + (ek || 0)).toFixed(3)) +
+        "   ·   ΔE/|E₀| = " + ((M.etot[M.cur] - M.etot[0]) / Math.abs(M.etot[0] || 1)).toExponential(2),
+      SRCFILE.name + "   ·   " + fmtSize(SRCFILE.size) + "   ·   " + M.frames.length + " frames" +
+        "   ·   " + M.n + " atoms" + (M.run ? "   ·   run.json ✓" : "   ·   box inferred"),
+      "captured " + new Date().toISOString(),
+    ];
+  }
+
+  function composeProofCanvas() {
+    if (!M.frames.length) return null;
+    const cvs = [els.boxcv, els.histcv, els.grcv, els.timecv];
+    const S = window.devicePixelRatio || 1;
+    const P = 20 * S, TITLE = 26 * S, LH = 30 * S, INSET = 18 * S;
+    const FONT = "px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    const title = "AMAT5315 · Week 2 — Molecular dynamics viewer";
+    const lines = proofLines();
+
+    const out = document.createElement("canvas");
+    const ctx = out.getContext("2d");
+    ctx.font = "650 " + TITLE + FONT;
+    let textW = ctx.measureText(title).width;
+    ctx.font = (20 * S) + FONT;
+    for (const L of lines) textW = Math.max(textW, ctx.measureText(L).width);
+
+    const capH = 14 * S + TITLE + 10 * S + lines.length * LH + 14 * S;
+    const W = Math.max(Math.max.apply(null, cvs.map(c => c.width)),
+                       Math.ceil(textW) + 2 * INSET) + 2 * P;
+    out.width = W;
+    out.height = P + cvs.reduce((a, c) => a + c.height + P, 0) + capH + P;
+
+    ctx.fillStyle = "#0f1420"; ctx.fillRect(0, 0, W, out.height);
+    let y = P;
+    for (const c of cvs) {
+      const x = Math.round((W - c.width) / 2);
+      ctx.fillStyle = "#1e2637"; ctx.fillRect(x, y, c.width, c.height);   // canvases are transparent
+      ctx.drawImage(c, x, y);
+      y += c.height + P;
+    }
+    ctx.fillStyle = "#171d2b"; ctx.fillRect(P, y, W - 2 * P, capH);
+    ctx.strokeStyle = "#2c3650"; ctx.lineWidth = 1;
+    ctx.strokeRect(P + 0.5, y + 0.5, W - 2 * P - 1, capH - 1);
+    let ty = y + 14 * S + TITLE - 6 * S;
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#e8edf6"; ctx.font = "650 " + TITLE + FONT;
+    ctx.fillText(title, P + INSET, ty);
+    ctx.font = (20 * S) + FONT; ctx.fillStyle = "#93a1b8";
+    for (const L of lines) { ty += LH; ctx.fillText(L, P + INSET, ty); }
+    return out;
+  }
+
+  window.composeProofPNG = function () {
+    const cv = composeProofCanvas();
+    return cv ? cv.toDataURL("image/png") : null;
+  };
+
+  function savePNG() {
+    const cv = composeProofCanvas();
+    if (!cv) return;
+    cv.toBlob(b => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b);
+      a.download = "week2-md-" + frameKey() + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, "image/png");
+  }
+
+  // ---------- empty state ----------
+  function showEmpty(msg) {
+    const main = document.getElementById("main");
+    main.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "empty";
+    box.innerHTML =
+      "<h3>Drop your <code>traj.jsonl</code> here</h3>" +
+      "<div>" + (msg || "") + "</div>" +
+      "<div>Also drop <code>run.json</code> for the exact box &amp; parameters " +
+      "(optional — the box is inferred from positions otherwise).</div>" +
+      "<div class='picker'><button id='pick' class='primary'>choose file(s)…</button></div>" +
+      "<div class='note'>Or serve this page next to your artifacts (GitHub Pages) and it auto-loads " +
+      "<code>./traj.jsonl</code> + <code>./run.json</code>.</div>";
+    main.appendChild(box);
+    document.getElementById("pick").onclick = () => document.getElementById("file").click();
+  }
+
+  // ---------- file / drop / fetch loading ----------
+  async function readFiles(fileList) {
+    const files = Array.from(fileList);
+    const trajFile = files.find(f => /\.jsonl$/i.test(f.name));
+    const runFile = files.find(f => /^run\.json$/i.test(f.name));
+    try {
+      if (!trajFile && !runFile) throw new Error("Choose traj.jsonl or run.json.");
+      if (!trajFile && !M.frames.length) throw new Error("Load traj.jsonl before adding run.json.");
+      const frames = trajFile ? parseJSONL(await trajFile.text()) : M.frames;
+      const run = runFile ? JSON.parse(await runFile.text()) : null;
+      if (runFile && (!Array.isArray(run?.box) || run.box.length !== 2 ||
+          !run.box.every(n => Number.isFinite(n) && n > 0))) {
+        throw new Error("run.json must contain box: [Lx, Ly] with positive lengths.");
+      }
+      const cur = trajFile ? 0 : M.cur;
+      setPlaying(false);
+      if (trajFile) { SRCFILE.name = trajFile.name; SRCFILE.size = trajFile.size; }
+      ingest(frames, run);
+      M.cur = cur;
+      els.scrub.value = String(cur);
+      render();
+    } catch (error) {
+      alert("Could not load files: " + error.message);
+    }
+  }
+
+  document.getElementById("loadfiles").onclick = () => document.getElementById("file").click();
+
+  document.getElementById("file").addEventListener("change", e => {
+    if (e.target.files && e.target.files.length) readFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  // drag & drop over whole window
+  const drop = document.getElementById("drop");
+  let dragDepth = 0;
+  window.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; drop.classList.add("show"); });
+  window.addEventListener("dragover", e => { e.preventDefault(); });
+  window.addEventListener("dragleave", e => { e.preventDefault(); if (--dragDepth <= 0) drop.classList.remove("show"); });
+  window.addEventListener("drop", e => {
+    e.preventDefault(); dragDepth = 0; drop.classList.remove("show");
+    if (e.dataTransfer && e.dataTransfer.files.length) readFiles(e.dataTransfer.files);
+  });
+
+  // keyboard: space = play/pause, arrows = step
+  window.addEventListener("keydown", e => {
+    if (!M.frames.length) return;
+    if (e.code === "Space") { e.preventDefault(); setPlaying(!M.playing); }
+    else if (e.code === "ArrowRight") { setPlaying(false); M.cur = Math.min(M.frames.length - 1, M.cur + 1); els.scrub.value = M.cur; render(); }
+    else if (e.code === "ArrowLeft") { setPlaying(false); M.cur = Math.max(0, M.cur - 1); els.scrub.value = M.cur; render(); }
+    else if (e.key === "s" || e.key === "S") savePNG();
+  });
+
+  window.addEventListener("resize", () => { if (M.frames.length) render(true); });
+
+  // ---------- try auto-fetch of deployed artifacts ----------
+  function tryFetch() {
+    fetch("./traj.jsonl").then(r => {
+      if (!r.ok) throw new Error("no traj");
+      SRCFILE.name = "traj.jsonl"; SRCFILE.size = +(r.headers.get("content-length") || 0);
+      return r.text();
+    }).then(text => {
+      const frames = parseJSONL(text);
+      // try run.json alongside (optional)
+      fetch("./run.json").then(r => r.ok ? r.json() : null).catch(() => null)
+        .then(run => ingest(frames, run))
+        .catch(() => ingest(frames, null));
+    }).catch(() => {
+      showEmpty("No <code>./traj.jsonl</code> found next to this page.");
+    });
+  }
+
+  showEmpty("Loading…");
+  tryFetch();
+})();
+</script>
+</body>
+</html>

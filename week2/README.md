@@ -55,3 +55,57 @@ and cutoff. Reproduce with:
 ```sh
 python3 benchmark_scaling.py   # needs matplotlib for scaling.png
 ```
+
+## GitHub Pages
+
+The heating trajectory (T: 0.2 → 1.2, N = 400, 200 frames) is published with
+the official trajectory viewer from the repository's `docs/` folder:
+
+**<https://charleyao.github.io/AMAT5315-2026Fall-Exercise/>**
+
+`docs/index.html` is a copy of `viewer/index.html`, sitting next to
+`docs/run.json` and `docs/traj.jsonl` (the viewer loads `./traj.jsonl` +
+`./run.json` relative to the page). GitHub Pages is configured to publish
+folder `/docs` on branch `main` (repo Settings → Pages).
+
+## Reproduce
+
+Commands below assume the repository root; `MD` is the release binary.
+
+```sh
+cargo build --release --manifest-path week2/md/Cargo.toml --bin md
+MD=week2/md/target/release/md
+```
+
+- **Timing** (contract run, NumPy vs Rust debug/release):
+  `python3 week2/data/benchmark.py` → `week2/data/timing.json` (median/min/max).
+- **Profile** (samply at N = 400, 1000 steps — the README table's numbers):
+
+  ```sh
+  cd week2/data/profile && cargo build --release
+  samply record --save-only --rate 5000 -o naive-n400.json.gz \
+    ./target/release/md-profile 400 1000 naive
+  samply record --save-only --rate 5000 -o cells-n400.json.gz \
+    ./target/release/md-profile 400 1000 cells
+  ```
+
+  Force share and elapsed time print on the run's stdout; the flame graphs
+  `profile-naive.png` / `profile-cells.png` are rendered from those two files.
+- **scaling.png**: `python3 week2/benchmark_scaling.py` (matplotlib needed)
+  → `week2/scaling.png` + `week2/data/scaling-md.json`.
+- **cold.mp4 / hot.mp4**: fixed-temperature reference runs and videos:
+
+  ```sh
+  $MD run --temperature 0.2 --out /tmp/cold
+  $MD video /tmp/cold --out week2/cold.mp4
+  $MD run --temperature 1.0 --out /tmp/hot
+  $MD video /tmp/hot --out week2/hot.mp4
+  ```
+
+- **Heating trajectory** (regenerates `docs/`):
+
+  ```sh
+  $MD run --n 400 --temperature 0.2 --ramp-to 1.2 \
+    --steps 20000 --sample-every 100 --out docs
+  cp week2/viewer/index.html docs/index.html
+  ```

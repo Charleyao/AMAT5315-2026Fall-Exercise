@@ -2,7 +2,7 @@
 //! for the Lennard-Jones fluid (Part 4).
 
 use crate::io::{RunMeta, SimulationOutput, TrajFrame};
-use crate::{advance, RC, System, VelocityVerlet};
+use crate::{advance, ForceMethod, RC, System, VelocityVerlet};
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -72,6 +72,7 @@ pub struct RunConfig {
     pub steps: usize,
     pub sample_every: usize,
     pub seed: u64,
+    pub force_method: ForceMethod,
 }
 
 impl Default for RunConfig {
@@ -85,6 +86,7 @@ impl Default for RunConfig {
             steps: 10000,
             sample_every: 50,
             seed: 2026,
+            force_method: ForceMethod::Cells,
         }
     }
 }
@@ -205,6 +207,7 @@ mod tests {
             steps: 50,
             sample_every: 50,
             seed: 2026,
+            force_method: ForceMethod::Cells,
         };
         let output = run_simulation(&config).unwrap();
         assert_eq!(output.frames.len(), 1);
@@ -219,5 +222,10 @@ mod tests {
         }
         assert!(f.e_pot.is_finite() && f.e_kin.is_finite());
         assert_eq!(output.meta.integrator.as_str(), "velocity-verlet");
+    }
+
+    #[test]
+    fn run_config_defaults_to_cells() {
+        assert_eq!(RunConfig::default().force_method, ForceMethod::Cells);
     }
 }

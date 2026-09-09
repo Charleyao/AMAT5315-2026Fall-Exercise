@@ -298,6 +298,9 @@ pub mod check;
 pub mod cli;
 pub mod io;
 pub mod video;
+pub mod cell_list;
+
+pub use cell_list::ForceMethod;
 
 pub use simulation::{build_lattice, gaussian_velocities, run_simulation, RunConfig};
 pub use io::{read_output, write_output, RunMeta, SimulationOutput, TrajFrame};

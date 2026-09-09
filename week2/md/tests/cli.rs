@@ -101,3 +101,51 @@ fn video_renders_mp4_when_ffmpeg_present() {
     assert!(size < 2_000_000, "video too large: {size} bytes");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn force_flags_run_and_keep_part4_run_json_contract() {
+    let part4_keys = [
+        "n", "rho", "box", "dt", "temperature", "eq_steps",
+        "steps", "sample_every", "seed", "integrator",
+    ];
+    for force in ["naive", "cells"] {
+        let dir = std::env::temp_dir().join(format!("md_force_{force}_test"));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let status = Command::new(env!("CARGO_BIN_EXE_md"))
+            .args([
+                "run", "--n", "36", "--eq-steps", "0", "--steps", "50",
+                "--sample-every", "50", "--force", force, "--out", dir.to_str().unwrap(),
+            ])
+            .status()
+            .expect("failed to run md binary");
+        assert!(status.success(), "--force {force} run failed");
+
+        let run_json = std::fs::read_to_string(dir.join("run.json")).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(&run_json).unwrap();
+        for key in part4_keys {
+            assert!(meta.get(key).is_some(), "run.json missing key {key}");
+        }
+        assert_eq!(
+            meta.as_object().unwrap().len(),
+            part4_keys.len(),
+            "run.json schema changed: expected exactly the Part 4 keys"
+        );
+        assert!(meta.get("force").is_none(), "run.json must not contain a force key");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn invalid_force_flag_is_rejected() {
+    let dir = std::env::temp_dir().join("md_force_invalid_test");
+    let out = Command::new(env!("CARGO_BIN_EXE_md"))
+        .args(["run", "--force", "bogus", "--out", dir.to_str().unwrap()])
+        .output()
+        .expect("failed to run md binary");
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid --force"), "stderr: {stderr}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

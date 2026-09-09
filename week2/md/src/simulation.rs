@@ -98,7 +98,8 @@ impl Default for RunConfig {
 pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
     let (positions, box_len) = build_lattice(config.n, config.rho)?;
     let velocities = gaussian_velocities(config.n, config.temperature, config.seed);
-    let mut system = System::new_periodic(positions, velocities, box_len, RC);
+    let mut system = System::new_periodic(positions, velocities, box_len, RC)
+        .with_force_method(config.force_method);
 
     // Initial: subtract the center-of-mass velocity immediately, then rescale
     // to the target T using T_thermo = E_kin / (N - 1).

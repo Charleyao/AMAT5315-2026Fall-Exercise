@@ -26,11 +26,82 @@ pub fn force(r: f64) -> f64 {
 
 
 // ---------------------------------------------------------------------------
-// Part 3 scaffolding (RED): minimal stubs so the dimer test compiles and
-// FAILS. Real behavior is implemented in the GREEN step.
+// Part 3: two-atom Lennard-Jones molecular dynamics
 // ---------------------------------------------------------------------------
 
-pub struct System;
+pub struct System {
+    positions: Vec<[f64; 2]>,
+    velocities: Vec<[f64; 2]>,
+    accelerations: Vec<[f64; 2]>, // cached: always a(x) at current positions
+}
+
+impl System {
+    pub fn n_atoms(&self) -> usize {
+        self.positions.len()
+    }
+
+    pub fn new(positions: Vec<[f64; 2]>, velocities: Vec<[f64; 2]>) -> System {
+        assert_eq!(positions.len(), velocities.len());
+        let n = positions.len();
+        let mut system = System {
+            positions,
+            velocities,
+            accelerations: vec![[0.0, 0.0]; n],
+        };
+        // Compute the initial accelerations before the first step.
+        system.update_accelerations();
+        system
+    }
+
+    // Acceleration from the Lennard-Jones pair force. Mass = 1, so a = F.
+    // Sign convention matches field_grid.rs: for a pair (i, j) with
+    // d = r_j - r_i, force on j = F(r) * d/r and force on i = -F(r) * d/r.
+    pub fn update_accelerations(&mut self) {
+        let n = self.n_atoms();
+        for a in &mut self.accelerations {
+            a[0] = 0.0;
+            a[1] = 0.0;
+        }
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let dx = self.positions[j][0] - self.positions[i][0];
+                let dy = self.positions[j][1] - self.positions[i][1];
+                let r = (dx * dx + dy * dy).sqrt();
+                let f = force(r); // scalar F(r) = -dU/dr
+                let fx = f * dx / r;
+                let fy = f * dy / r;
+                self.accelerations[j][0] += fx;
+                self.accelerations[j][1] += fy;
+                self.accelerations[i][0] -= fx;
+                self.accelerations[i][1] -= fy;
+            }
+        }
+    }
+
+    pub fn kinetic_energy(&self) -> f64 {
+        self.velocities
+            .iter()
+            .map(|v| 0.5 * (v[0] * v[0] + v[1] * v[1]))
+            .sum()
+    }
+
+    pub fn potential_energy(&self) -> f64 {
+        let n = self.n_atoms();
+        let mut u = 0.0;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let dx = self.positions[j][0] - self.positions[i][0];
+                let dy = self.positions[j][1] - self.positions[i][1];
+                u += energy((dx * dx + dy * dy).sqrt());
+            }
+        }
+        u
+    }
+
+    pub fn total_energy(&self) -> f64 {
+        self.kinetic_energy() + self.potential_energy()
+    }
+}
 
 pub trait Integrator {
     fn step(&self, system: &mut System, dt: f64);
@@ -44,19 +115,61 @@ pub struct ForwardEuler;
 pub struct VelocityVerlet;
 
 impl Integrator for ForwardEuler {
-    fn step(&self, _system: &mut System, _dt: f64) {}
+    fn step(&self, system: &mut System, dt: f64) {
+        let n = system.n_atoms();
+        // x_{n+1} = x_n + v_n dt
+        for i in 0..n {
+            system.positions[i][0] += system.velocities[i][0] * dt;
+            system.positions[i][1] += system.velocities[i][1] * dt;
+        }
+        // v_{n+1} = v_n + a_n dt  (explicit: uses the OLD acceleration)
+        for i in 0..n {
+            system.velocities[i][0] += system.accelerations[i][0] * dt;
+            system.velocities[i][1] += system.accelerations[i][1] * dt;
+        }
+        // Retain a_{n+1} for the next step.
+        system.update_accelerations();
+    }
 }
 
 impl Integrator for VelocityVerlet {
-    fn step(&self, _system: &mut System, _dt: f64) {}
+    fn step(&self, system: &mut System, dt: f64) {
+        let n = system.n_atoms();
+        let a_old = system.accelerations.clone(); // a_n
+        // x_{n+1} = x_n + v_n dt + 0.5 a_n dt^2
+        for i in 0..n {
+            system.positions[i][0] +=
+                system.velocities[i][0] * dt + 0.5 * a_old[i][0] * dt * dt;
+            system.positions[i][1] +=
+                system.velocities[i][1] * dt + 0.5 * a_old[i][1] * dt * dt;
+        }
+        // a_{n+1}
+        system.update_accelerations();
+        // v_{n+1} = v_n + 0.5 (a_n + a_{n+1}) dt
+        for i in 0..n {
+            system.velocities[i][0] +=
+                0.5 * (a_old[i][0] + system.accelerations[i][0]) * dt;
+            system.velocities[i][1] +=
+                0.5 * (a_old[i][1] + system.accelerations[i][1]) * dt;
+        }
+    }
 }
 
+// Run the two-atom experiment with a given integrator and return the
+// relative total-energy error (E(t) - E0) / |E0| for t = 0..=steps.
 pub fn run_dimer_experiment(method: &impl Integrator, steps: usize, dt: f64) -> Vec<f64> {
-    let mut system = System;
+    let mut system = System::new(
+        vec![[0.0, 0.0], [1.2, 0.0]],
+        vec![[0.0, 0.0], [0.0, 0.0]],
+    );
+    let e0 = system.total_energy();
+    let mut errors = Vec::with_capacity(steps + 1);
+    errors.push(0.0); // (E0 - E0) / |E0| at t = 0
     for _ in 0..steps {
         advance(method, &mut system, dt);
+        errors.push((system.total_energy() - e0) / e0.abs());
     }
-    vec![0.0; steps + 1]
+    errors
 }
 
 

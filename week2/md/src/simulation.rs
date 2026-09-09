@@ -73,6 +73,7 @@ pub struct RunConfig {
     pub sample_every: usize,
     pub seed: u64,
     pub force_method: ForceMethod,
+    pub ramp_to: Option<f64>,
 }
 
 impl Default for RunConfig {
@@ -87,14 +88,25 @@ impl Default for RunConfig {
             sample_every: 50,
             seed: 2026,
             force_method: ForceMethod::Cells,
+            ramp_to: None,
         }
     }
 }
 
 // Run the full simulation: build the lattice, initialize velocities
 // (Gaussian -> subtract COM -> rescale with T_thermo), equilibrate with a
-// velocity-rescaling thermostat every 50 steps, then run production with the
-// thermostat OFF and save every `sample_every` steps (step 0 is not saved).
+// velocity-rescaling thermostat every 50 steps, then run production (thermostat
+// OFF unless --ramp-to is set) and save every `sample_every` steps (step 0 is
+// not saved).
+
+// Target thermostat temperature at a production step for a linear ramp from
+// `t0` (start of production) to `tf` (final production step).
+fn ramp_target(t0: f64, tf: f64, step: usize, total_steps: usize) -> f64 {
+    debug_assert!(step <= total_steps && total_steps > 0);
+    let f = step as f64 / total_steps as f64;
+    t0 + (tf - t0) * f
+}
+
 pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
     let (positions, box_len) = build_lattice(config.n, config.rho)?;
     let velocities = gaussian_velocities(config.n, config.temperature, config.seed);
@@ -116,10 +128,20 @@ pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
         }
     }
 
-    // Production with the thermostat OFF.
+    // Production. By default the thermostat is OFF (NVE). With --ramp-to the
+    // target temperature rises linearly from config.temperature (start of
+    // production) to ramp_to (final production step) and velocities are
+    // rescaled every 50 production steps, exactly like equilibration (same
+    // T_thermo = E_kin / (N - 1) definition).
     let mut frames = Vec::new();
     for step in 1..=config.steps {
         advance(&VelocityVerlet, &mut system, config.dt);
+        if let Some(tf) = config.ramp_to {
+            if step % 50 == 0 {
+                let target = ramp_target(config.temperature, tf, step, config.steps);
+                system.rescale_to_temperature(target);
+            }
+        }
         if step % config.sample_every == 0 {
             frames.push(TrajFrame {
                 step,
@@ -144,6 +166,7 @@ pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
             sample_every: config.sample_every,
             seed: config.seed,
             integrator: "velocity-verlet".to_string(),
+            ramp_to: config.ramp_to,
         },
         frames,
     })
@@ -209,6 +232,7 @@ mod tests {
             sample_every: 50,
             seed: 2026,
             force_method: ForceMethod::Cells,
+            ramp_to: None,
         };
         let output = run_simulation(&config).unwrap();
         assert_eq!(output.frames.len(), 1);
@@ -228,5 +252,82 @@ mod tests {
     #[test]
     fn run_config_defaults_to_cells() {
         assert_eq!(RunConfig::default().force_method, ForceMethod::Cells);
+        assert_eq!(RunConfig::default().ramp_to, None);
+    }
+
+    #[test]
+    fn heating_ramp_temperature_linearly_every_50_production_steps() {
+        // eq = 0 so production starts at --temperature; the target ramps
+        // linearly 0.2 -> 1.2 over the 400 production steps and velocities are
+        // rescaled every 50 steps. Frames are sampled every 50 steps (exactly
+        // at each rescale), so each frame's thermostat temperature must equal
+        // the ramp target at that production step.
+        let config = RunConfig {
+            n: 36,
+            rho: 0.8,
+            temperature: 0.2,
+            dt: 0.01,
+            eq_steps: 0,
+            steps: 400,
+            sample_every: 50,
+            seed: 2026,
+            force_method: ForceMethod::Naive,
+            ramp_to: Some(1.2),
+        };
+        let output = run_simulation(&config).unwrap();
+        assert_eq!(output.frames.len(), 8); // steps 50, 100, ..., 400
+        let n = 36usize;
+        for f in &output.frames {
+            let measured = f.e_kin / (n - 1) as f64;
+            let expected = 0.2 + 1.0 * f.step as f64 / config.steps as f64;
+            let tol = 1e-6 * expected.abs().max(1.0);
+            assert!(
+                (measured - expected).abs() <= tol,
+                "step {}: measured T = {measured}, expected ramp target {expected}",
+                f.step
+            );
+        }
+        // First and last targets: step 50 -> 0.325, final step 400 -> 1.2.
+        let first = &output.frames[0];
+        let last = &output.frames[output.frames.len() - 1];
+        assert!((first.e_kin / (n - 1) as f64 - 0.325).abs() < 1e-6);
+        assert!((last.e_kin / (n - 1) as f64 - 1.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ramp_target_is_linear_between_endpoints() {
+        assert_eq!(ramp_target(0.2, 1.2, 0, 400), 0.2);
+        assert!((ramp_target(0.2, 1.2, 400, 400) - 1.2).abs() < 1e-12);
+        assert!((ramp_target(0.2, 1.2, 200, 400) - 0.7).abs() < 1e-12);
+        // Monotonic: later rescale steps have strictly higher targets.
+        let mut prev = ramp_target(0.2, 1.2, 50, 400);
+        for step in (100..=400).step_by(50) {
+            let t = ramp_target(0.2, 1.2, step, 400);
+            assert!(t > prev, "ramp not monotonic at step {step}");
+            prev = t;
+        }
+    }
+
+    #[test]
+    fn default_unheated_run_has_no_ramp_and_keeps_temperature() {
+        let config = RunConfig {
+            n: 36,
+            rho: 0.8,
+            temperature: 0.5,
+            dt: 0.01,
+            eq_steps: 1000,
+            steps: 100,
+            sample_every: 100,
+            seed: 2026,
+            force_method: ForceMethod::Naive,
+            ramp_to: None,
+        };
+        let output = run_simulation(&config).unwrap();
+        assert_eq!(output.meta.ramp_to, None);
+        assert_eq!(output.frames.len(), 1);
+        // Production thermostat stays OFF: the temperature is not pulled to any
+        // ramp target and stays near the equilibrated 0.5 over 100 NVE steps.
+        let measured = output.frames[0].e_kin / 35.0;
+        assert!(measured > 0.3 && measured < 0.7, "measured T = {measured}");
     }
 }

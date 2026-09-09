@@ -16,6 +16,8 @@ pub struct RunMeta {
     pub sample_every: usize,
     pub seed: u64,
     pub integrator: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ramp_to: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -93,6 +95,7 @@ mod tests {
                 sample_every: 50,
                 seed: 2026,
                 integrator: "velocity-verlet".to_string(),
+                ramp_to: None,
             },
             frames: vec![TrajFrame {
                 step: 50,
@@ -111,6 +114,53 @@ mod tests {
         assert_eq!(read.frames.len(), 1);
         assert_eq!(read.frames[0].step, 50);
         assert_eq!(read.frames[0].pos.len(), 1);
+        assert_eq!(read.meta.ramp_to, None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn heating_meta_round_trips_ramp_to_and_non_heating_omits_it() {
+        let dir = std::env::temp_dir().join("md_io_ramp_to_test");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mk = |ramp_to| SimulationOutput {
+            meta: RunMeta {
+                n: 4,
+                rho: 0.8,
+                box_len: [10.0, 10.0],
+                dt: 0.01,
+                temperature: 0.2,
+                eq_steps: 0,
+                steps: 50,
+                sample_every: 50,
+                seed: 2026,
+                integrator: "velocity-verlet".to_string(),
+                ramp_to,
+            },
+            frames: vec![],
+        };
+
+        // Heating run: ramp_to is written and read back.
+        write_output(&dir, &mk(Some(1.2))).unwrap();
+        let raw = std::fs::read_to_string(dir.join("run.json")).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(meta["ramp_to"].as_f64(), Some(1.2));
+        assert_eq!(read_output(&dir).unwrap().meta.ramp_to, Some(1.2));
+
+        // Non-heating run: no ramp_to key at all (Part 4 contract preserved).
+        write_output(&dir, &mk(None)).unwrap();
+        let raw = std::fs::read_to_string(dir.join("run.json")).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert!(meta.get("ramp_to").is_none());
+        assert_eq!(read_output(&dir).unwrap().meta.ramp_to, None);
+
+        // Old files without the key still read (backward compatibility).
+        let old = "{\"n\":4,\"rho\":0.8,\"box\":[10.0,10.0],\"dt\":0.01,\
+            \"temperature\":0.5,\"eq_steps\":0,\"steps\":50,\
+            \"sample_every\":50,\"seed\":2026,\"integrator\":\"velocity-verlet\"}";
+        std::fs::write(dir.join("run.json"), old).unwrap();
+        assert_eq!(read_output(&dir).unwrap().meta.ramp_to, None);
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

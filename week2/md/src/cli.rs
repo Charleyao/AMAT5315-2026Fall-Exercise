@@ -19,6 +19,7 @@ pub struct RunArgs {
     pub sample_every: usize,
     pub seed: u64,
     pub force: ForceMethod,
+    pub ramp_to: Option<f64>,
     pub out: PathBuf,
 }
 
@@ -34,13 +35,14 @@ impl Default for RunArgs {
             sample_every: 50,
             seed: 2026,
             force: ForceMethod::Cells,
+            ramp_to: None,
             out: PathBuf::from("artifacts"),
         }
     }
 }
 
 fn usage() -> String {
-    "usage:\n  md run [--n 100] [--rho 0.8] [--temperature 0.5] [--dt 0.01] [--eq-steps 2000] [--steps 10000] [--sample-every 50] [--seed 2026] [--force naive|cells] [--out artifacts]\n  md check [artifacts]\n  md video [artifacts] [--out artifacts/run.mp4]".to_string()
+    "usage:\n  md run [--n 100] [--rho 0.8] [--temperature 0.5] [--dt 0.01] [--eq-steps 2000] [--steps 10000] [--sample-every 50] [--seed 2026] [--force naive|cells] [--ramp-to <T_final>] [--out artifacts]\n  md check [artifacts]\n  md video [artifacts] [--out artifacts/run.mp4]".to_string()
 }
 
 pub fn parse(args: &[String]) -> Result<Command, String> {
@@ -76,6 +78,9 @@ fn parse_run(args: &[String]) -> Result<Command, String> {
             "--seed" => run.seed = value.parse().map_err(|_| format!("invalid --seed: {value}"))?,
             "--force" => run.force = ForceMethod::parse(value)
                 .map_err(|_| format!("invalid --force: {value} (expected naive or cells)"))?,
+            "--ramp-to" => run.ramp_to = Some(
+                value.parse().map_err(|_| format!("invalid --ramp-to: {value}"))?,
+            ),
             "--out" => run.out = PathBuf::from(value),
             other => return Err(format!("unknown flag: {other}\n{}", usage())),
         }
@@ -199,6 +204,35 @@ mod tests {
         match parse(&args(&["md", "run", "--force", "bogus"])) {
             Err(msg) => assert!(msg.contains("invalid --force"), "error was: {msg}"),
             Ok(_) => panic!("expected an error for an invalid --force value"),
+        }
+    }
+
+    #[test]
+    fn parse_run_ramp_to_some() {
+        match parse(&args(&["md", "run", "--temperature", "0.2", "--ramp-to", "1.2"]))
+            .unwrap()
+        {
+            Command::Run(r) => {
+                assert_eq!(r.temperature, 0.2);
+                assert_eq!(r.ramp_to, Some(1.2));
+            }
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn parse_run_ramp_to_none_by_default() {
+        match parse(&args(&["md", "run"])).unwrap() {
+            Command::Run(r) => assert_eq!(r.ramp_to, None),
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn parse_run_ramp_to_rejects_invalid() {
+        match parse(&args(&["md", "run", "--ramp-to", "hot" ])) {
+            Err(msg) => assert!(msg.contains("invalid --ramp-to"), "error was: {msg}"),
+            Ok(_) => panic!("expected an error for an invalid --ramp-to value"),
         }
     }
 }

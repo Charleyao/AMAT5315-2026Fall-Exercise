@@ -26,6 +26,7 @@ fn run_cmd(args: &RunArgs) -> ExitCode {
         sample_every: args.sample_every,
         seed: args.seed,
         force_method: args.force,
+        ramp_to: args.ramp_to,
     };
     match md::run_simulation(&config) {
         Ok(output) => {

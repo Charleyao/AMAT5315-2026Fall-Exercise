@@ -57,6 +57,8 @@ pub struct System {
     positions: Vec<[f64; 2]>,
     velocities: Vec<[f64; 2]>,
     accelerations: Vec<[f64; 2]>, // cached: always a(x) at current positions
+    box_len: Option<[f64; 2]>,    // None => open boundary (dimer)
+    rc: Option<f64>,              // None => no cutoff (dimer)
 }
 
 impl System {
@@ -65,21 +67,63 @@ impl System {
     }
 
     pub fn new(positions: Vec<[f64; 2]>, velocities: Vec<[f64; 2]>) -> System {
+        Self::build(positions, velocities, None, None)
+    }
+
+    pub fn new_periodic(
+        positions: Vec<[f64; 2]>,
+        velocities: Vec<[f64; 2]>,
+        box_len: [f64; 2],
+        rc: f64,
+    ) -> System {
+        Self::build(positions, velocities, Some(box_len), Some(rc))
+    }
+
+    fn build(
+        positions: Vec<[f64; 2]>,
+        velocities: Vec<[f64; 2]>,
+        box_len: Option<[f64; 2]>,
+        rc: Option<f64>,
+    ) -> System {
         assert_eq!(positions.len(), velocities.len());
         let n = positions.len();
         let mut system = System {
             positions,
             velocities,
             accelerations: vec![[0.0, 0.0]; n],
+            box_len,
+            rc,
         };
         // Compute the initial accelerations before the first step.
         system.update_accelerations();
         system
     }
 
+    // Minimum-image separation of a raw displacement (dx, dy).
+    fn separation(&self, dx: f64, dy: f64) -> (f64, f64) {
+        match self.box_len {
+            Some([lx, ly]) => {
+                let dx = dx - lx * (dx / lx).round();
+                let dy = dy - ly * (dy / ly).round();
+                (dx, dy)
+            }
+            None => (dx, dy),
+        }
+    }
+
+    // Wrap positions back into [0, Lx) x [0, Ly) when periodic.
+    pub fn apply_periodic_wrap(&mut self) {
+        if let Some([lx, ly]) = self.box_len {
+            for p in &mut self.positions {
+                p[0] = p[0].rem_euclid(lx);
+                p[1] = p[1].rem_euclid(ly);
+            }
+        }
+    }
+
     // Acceleration from the Lennard-Jones pair force. Mass = 1, so a = F.
-    // Sign convention matches field_grid.rs: for a pair (i, j) with
-    // d = r_j - r_i, force on j = F(r) * d/r and force on i = -F(r) * d/r.
+    // With a periodic box, uses the minimum-image convention; with a cutoff,
+    // pairs at r >= rc contribute no force.
     pub fn update_accelerations(&mut self) {
         let n = self.n_atoms();
         for a in &mut self.accelerations {
@@ -90,8 +134,15 @@ impl System {
             for j in (i + 1)..n {
                 let dx = self.positions[j][0] - self.positions[i][0];
                 let dy = self.positions[j][1] - self.positions[i][1];
+                let (dx, dy) = self.separation(dx, dy);
                 let r = (dx * dx + dy * dy).sqrt();
-                let f = force(r); // scalar F(r) = -dU/dr
+                let f = match self.rc {
+                    Some(rc) => force_cut(r, rc),
+                    None => force(r),
+                };
+                if f == 0.0 {
+                    continue;
+                }
                 let fx = f * dx / r;
                 let fy = f * dy / r;
                 self.accelerations[j][0] += fx;
@@ -116,7 +167,12 @@ impl System {
             for j in (i + 1)..n {
                 let dx = self.positions[j][0] - self.positions[i][0];
                 let dy = self.positions[j][1] - self.positions[i][1];
-                u += energy((dx * dx + dy * dy).sqrt());
+                let (dx, dy) = self.separation(dx, dy);
+                let r = (dx * dx + dy * dy).sqrt();
+                u += match self.rc {
+                    Some(rc) => energy_shifted(r, rc),
+                    None => energy(r),
+                };
             }
         }
         u
@@ -124,6 +180,44 @@ impl System {
 
     pub fn total_energy(&self) -> f64 {
         self.kinetic_energy() + self.potential_energy()
+    }
+
+    // Thermostat temperature: after removing the center-of-mass velocity,
+    // 2 degrees of freedom are gone, so T_thermo = E_kin / (N - 1).
+    pub fn thermostat_temperature(&self) -> f64 {
+        let n = self.n_atoms();
+        assert!(n > 1, "thermostat temperature needs N > 1");
+        self.kinetic_energy() / (n - 1) as f64
+    }
+
+    pub fn subtract_com_velocity(&mut self) {
+        let n = self.n_atoms();
+        if n == 0 {
+            return;
+        }
+        let mut sum = [0.0, 0.0];
+        for v in &self.velocities {
+            sum[0] += v[0];
+            sum[1] += v[1];
+        }
+        let com = [sum[0] / n as f64, sum[1] / n as f64];
+        for v in &mut self.velocities {
+            v[0] -= com[0];
+            v[1] -= com[1];
+        }
+    }
+
+    // Rescale velocities to a target temperature using T_thermo.
+    pub fn rescale_to_temperature(&mut self, target: f64) {
+        let t = self.thermostat_temperature();
+        if t <= 0.0 {
+            return;
+        }
+        let scale = (target / t).sqrt();
+        for v in &mut self.velocities {
+            v[0] *= scale;
+            v[1] *= scale;
+        }
     }
 }
 
@@ -167,6 +261,8 @@ impl Integrator for VelocityVerlet {
             system.positions[i][1] +=
                 system.velocities[i][1] * dt + 0.5 * a_old[i][1] * dt * dt;
         }
+        // Periodic systems wrap positions back into the box here.
+        system.apply_periodic_wrap();
         // a_{n+1}
         system.update_accelerations();
         // v_{n+1} = v_n + 0.5 (a_n + a_{n+1}) dt
@@ -270,6 +366,49 @@ mod tests {
         );
         // force_cut equals the Part 2 force inside the cutoff.
         assert_eq!(force_cut(rc - eps, rc), force(rc - eps));
+    }
+
+    // Part 4: periodic N-body checks
+    #[test]
+    fn total_internal_force_sums_to_zero() {
+        let box_len = [10.0, 10.0];
+        let rc = 2.5;
+        // Distinct sites, some near the boundary so minimum image is used.
+        let positions = vec![
+            [0.5, 0.5],
+            [1.2, 0.5],
+            [9.8, 9.8],
+            [0.5, 9.7],
+            [4.0, 5.0],
+        ];
+        let velocities = vec![[0.0, 0.0]; positions.len()];
+        let mut system = System::new_periodic(positions, velocities, box_len, rc);
+        system.update_accelerations();
+        let mut sum = [0.0, 0.0];
+        for a in &system.accelerations {
+            sum[0] += a[0];
+            sum[1] += a[1];
+        }
+        assert!(
+            sum[0].abs() < 1e-12 && sum[1].abs() < 1e-12,
+            "net internal force should be zero, got {:?}",
+            sum
+        );
+    }
+
+    #[test]
+    fn periodic_pair_uses_minimum_image() {
+        let box_len = [10.0, 10.0];
+        // Two atoms near opposite x edges: true distance is 1.0, not 9.0.
+        let positions = vec![[0.5, 5.0], [9.5, 5.0]];
+        let velocities = vec![[0.0, 0.0], [0.0, 0.0]];
+        let system = System::new_periodic(positions, velocities, box_len, 2.5);
+        let expected = energy_shifted(1.0, 2.5);
+        assert!(
+            (system.potential_energy() - expected).abs() < 1e-12,
+            "potential energy should use the minimum-image distance, got {}",
+            system.potential_energy()
+        );
     }
 
 

@@ -47,8 +47,8 @@ pub fn gaussian_velocities(n: usize, temperature: f64, seed: u64) -> Vec<[f64; 2
     let mut rng = StdRng::seed_from_u64(seed);
     let sigma = temperature.sqrt();
     // Box-Muller transform: two independent uniform draws produce two
-    // independent standard-normal draws. `rand` 0.8 has no StandardNormal,
-    // so we generate the Gaussian pair directly.
+    // independent standard-normal draws. u1 is drawn from [1e-12, 1) so the
+    // log is always finite.
     let positive = Uniform::new(1e-12_f64, 1.0_f64);
     let unit = Uniform::new(0.0_f64, 1.0_f64);
     (0..n)
@@ -120,13 +120,16 @@ pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
 
     // Equilibration with the thermostat ON: rescale every 50 steps using the
     // same T_thermo definition. Uniform rescaling preserves zero COM velocity,
-    // so no further COM subtraction is needed.
+    // so no per-rescale COM subtraction is needed.
     for s in 0..config.eq_steps {
         advance(&VelocityVerlet, &mut system, config.dt);
         if s % 50 == 0 {
             system.rescale_to_temperature(config.temperature);
         }
     }
+    // Zero the center-of-mass momentum once more before production, matching
+    // the reference week2/sim.py cadence.
+    system.subtract_com_velocity();
 
     // Production. By default the thermostat is OFF (NVE). With --ramp-to the
     // target temperature rises linearly from config.temperature (start of

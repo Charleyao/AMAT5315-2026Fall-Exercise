@@ -7,3 +7,8 @@ edition = "2024"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
+
+# Keep full debug info in the optimized release build so sampling profilers
+# (samply/perf) can resolve function names and source locations.
+[profile.release]
+debug = true

@@ -59,6 +59,8 @@ pub struct System {
     accelerations: Vec<[f64; 2]>, // cached: always a(x) at current positions
     box_len: Option<[f64; 2]>,    // None => open boundary (dimer)
     rc: Option<f64>,              // None => no cutoff (dimer)
+    force_method: ForceMethod,    // low-level default stays Naive
+    cells: CellList,              // reusable cell-grid buffer
 }
 
 impl System {
@@ -79,6 +81,14 @@ impl System {
         Self::build(positions, velocities, Some(box_len), Some(rc))
     }
 
+    // Select the force method. Recomputes the initial accelerations so they
+    // match the chosen method from step 0.
+    pub fn with_force_method(mut self, method: ForceMethod) -> System {
+        self.force_method = method;
+        self.update_accelerations();
+        self
+    }
+
     fn build(
         positions: Vec<[f64; 2]>,
         velocities: Vec<[f64; 2]>,
@@ -93,6 +103,8 @@ impl System {
             accelerations: vec![[0.0, 0.0]; n],
             box_len,
             rc,
+            force_method: ForceMethod::Naive,
+            cells: CellList::new(),
         };
         // Compute the initial accelerations before the first step.
         system.update_accelerations();
@@ -121,10 +133,9 @@ impl System {
         }
     }
 
-    // Acceleration from the Lennard-Jones pair force. Mass = 1, so a = F.
-    // With a periodic box, uses the minimum-image convention; with a cutoff,
-    // pairs at r >= rc contribute no force.
-    pub fn update_accelerations(&mut self) {
+    // Acceleration from the Lennard-Jones pair force (naive O(N^2) path).
+    // Body is the original Part 4 implementation, unchanged.
+    fn update_accelerations_naive(&mut self) {
         let n = self.n_atoms();
         for a in &mut self.accelerations {
             a[0] = 0.0;
@@ -153,6 +164,19 @@ impl System {
         }
     }
 
+    // Acceleration from the Lennard-Jones pair force. Mass = 1, so a = F.
+    // With a periodic box, uses the minimum-image convention; with a cutoff,
+    // pairs at r >= rc contribute no force. Dispatches on the force method.
+    pub fn update_accelerations(&mut self) {
+        match (self.force_method, self.box_len, self.rc) {
+            (ForceMethod::Cells, Some(box_len), Some(rc)) => {
+                let (acc, _) = self.cells.accelerations_and_energy(&self.positions, box_len, rc);
+                self.accelerations = acc;
+            }
+            _ => self.update_accelerations_naive(),
+        }
+    }
+
     pub fn kinetic_energy(&self) -> f64 {
         self.velocities
             .iter()
@@ -160,7 +184,7 @@ impl System {
             .sum()
     }
 
-    pub fn potential_energy(&self) -> f64 {
+    fn potential_energy_naive(&self) -> f64 {
         let n = self.n_atoms();
         let mut u = 0.0;
         for i in 0..n {
@@ -176,6 +200,19 @@ impl System {
             }
         }
         u
+    }
+
+    // Shifted potential energy. Dispatches on the force method; keeps an
+    // `&self` signature so Part 1-4 call sites are unchanged (energy is not
+    // the hot path, so the cells branch uses a scratch buffer).
+    pub fn potential_energy(&self) -> f64 {
+        match (self.force_method, self.box_len, self.rc) {
+            (ForceMethod::Cells, Some(box_len), Some(rc)) => {
+                let mut scratch = CellList::new();
+                scratch.potential_energy(&self.positions, box_len, rc)
+            }
+            _ => self.potential_energy_naive(),
+        }
     }
 
     pub fn total_energy(&self) -> f64 {
@@ -300,7 +337,7 @@ pub mod io;
 pub mod video;
 pub mod cell_list;
 
-pub use cell_list::ForceMethod;
+pub use cell_list::{CellList, ForceMethod};
 
 pub use simulation::{build_lattice, gaussian_velocities, run_simulation, RunConfig};
 pub use io::{read_output, write_output, RunMeta, SimulationOutput, TrajFrame};

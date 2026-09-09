@@ -1,7 +1,8 @@
 //! Lattice construction, velocity initialization, and the simulation driver
 //! for the Lennard-Jones fluid (Part 4).
 
-use crate::{RC, System};
+use crate::io::{RunMeta, SimulationOutput, TrajFrame};
+use crate::{advance, RC, System, VelocityVerlet};
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -61,6 +62,90 @@ pub fn gaussian_velocities(n: usize, temperature: f64, seed: u64) -> Vec<[f64; 2
         .collect()
 }
 
+#[derive(Clone, Debug)]
+pub struct RunConfig {
+    pub n: usize,
+    pub rho: f64,
+    pub temperature: f64,
+    pub dt: f64,
+    pub eq_steps: usize,
+    pub steps: usize,
+    pub sample_every: usize,
+    pub seed: u64,
+}
+
+impl Default for RunConfig {
+    fn default() -> Self {
+        Self {
+            n: 100,
+            rho: 0.8,
+            temperature: 0.5,
+            dt: 0.01,
+            eq_steps: 2000,
+            steps: 10000,
+            sample_every: 50,
+            seed: 2026,
+        }
+    }
+}
+
+// Run the full simulation: build the lattice, initialize velocities
+// (Gaussian -> subtract COM -> rescale with T_thermo), equilibrate with a
+// velocity-rescaling thermostat every 50 steps, then run production with the
+// thermostat OFF and save every `sample_every` steps (step 0 is not saved).
+pub fn run_simulation(config: &RunConfig) -> Result<SimulationOutput, String> {
+    let (positions, box_len) = build_lattice(config.n, config.rho)?;
+    let velocities = gaussian_velocities(config.n, config.temperature, config.seed);
+    let mut system = System::new_periodic(positions, velocities, box_len, RC);
+
+    // Initial: subtract the center-of-mass velocity immediately, then rescale
+    // to the target T using T_thermo = E_kin / (N - 1).
+    system.subtract_com_velocity();
+    system.rescale_to_temperature(config.temperature);
+
+    // Equilibration with the thermostat ON: rescale every 50 steps using the
+    // same T_thermo definition. Uniform rescaling preserves zero COM velocity,
+    // so no further COM subtraction is needed.
+    for s in 0..config.eq_steps {
+        advance(&VelocityVerlet, &mut system, config.dt);
+        if s % 50 == 0 {
+            system.rescale_to_temperature(config.temperature);
+        }
+    }
+
+    // Production with the thermostat OFF.
+    let mut frames = Vec::new();
+    for step in 1..=config.steps {
+        advance(&VelocityVerlet, &mut system, config.dt);
+        if step % config.sample_every == 0 {
+            frames.push(TrajFrame {
+                step,
+                t: step as f64 * config.dt,
+                pos: system.positions.clone(),
+                vel: system.velocities.clone(),
+                e_pot: system.potential_energy(),
+                e_kin: system.kinetic_energy(),
+            });
+        }
+    }
+
+    Ok(SimulationOutput {
+        meta: RunMeta {
+            n: config.n,
+            rho: config.rho,
+            box_len,
+            dt: config.dt,
+            temperature: config.temperature,
+            eq_steps: config.eq_steps,
+            steps: config.steps,
+            sample_every: config.sample_every,
+            seed: config.seed,
+            integrator: "velocity-verlet".to_string(),
+        },
+        frames,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +192,32 @@ mod tests {
         // temperature matches the target.
         system.rescale_to_temperature(0.5);
         assert!((system.thermostat_temperature() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn small_run_produces_one_saved_frame() {
+        let config = RunConfig {
+            n: 36,
+            rho: 0.8,
+            temperature: 0.5,
+            dt: 0.01,
+            eq_steps: 0,
+            steps: 50,
+            sample_every: 50,
+            seed: 2026,
+        };
+        let output = run_simulation(&config).unwrap();
+        assert_eq!(output.frames.len(), 1);
+        let f = &output.frames[0];
+        assert_eq!(f.step, 50);
+        assert!((f.t - 0.5).abs() < 1e-12);
+        assert_eq!(f.pos.len(), 36);
+        assert_eq!(f.vel.len(), 36);
+        for p in &f.pos {
+            assert!(p[0] >= 0.0 && p[0] < output.meta.box_len[0]);
+            assert!(p[1] >= 0.0 && p[1] < output.meta.box_len[1]);
+        }
+        assert!(f.e_pot.is_finite() && f.e_kin.is_finite());
+        assert_eq!(output.meta.integrator.as_str(), "velocity-verlet");
     }
 }

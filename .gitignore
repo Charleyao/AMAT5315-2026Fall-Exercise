@@ -1,3 +1,4 @@
 codex-*.tar.gz
 __pycache__/
 *.pyc
+target/

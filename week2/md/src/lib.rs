@@ -293,6 +293,13 @@ pub fn run_dimer_experiment(method: &impl Integrator, steps: usize, dt: f64) -> 
 }
 
 
+pub mod simulation;
+pub mod check;
+pub mod cli;
+pub mod io;
+pub mod video;
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

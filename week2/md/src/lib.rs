@@ -25,6 +25,30 @@ pub fn force(r: f64) -> f64 {
 }
 
 
+// Fixed course cutoff for the Lennard-Jones fluid (Part 4).
+pub const RC: f64 = 2.5;
+
+// Shifted Lennard-Jones pair potential with cutoff.
+// U_cut(r) = U(r) - U(rc) for r < rc, and 0 for r >= rc.
+pub fn energy_shifted(r: f64, rc: f64) -> f64 {
+    if r < rc {
+        energy(r) - energy(rc)
+    } else {
+        0.0
+    }
+}
+
+// Lennard-Jones radial force with cutoff: the Part 2 force for r < rc,
+// zero for r >= rc.
+pub fn force_cut(r: f64, rc: f64) -> f64 {
+    if r < rc {
+        force(r)
+    } else {
+        0.0
+    }
+}
+
+
 // ---------------------------------------------------------------------------
 // Part 3: two-atom Lennard-Jones molecular dynamics
 // ---------------------------------------------------------------------------
@@ -224,6 +248,28 @@ mod tests {
                 numerical_force
             );
         }
+    }
+
+
+    // Part 4: cutoff wrappers
+    #[test]
+    fn shifted_potential_continuous_at_cutoff() {
+        let rc = 2.5;
+        // Exactly zero at and beyond the cutoff.
+        assert_eq!(energy_shifted(rc, rc), 0.0);
+        assert_eq!(energy_shifted(rc + 0.5, rc), 0.0);
+        assert_eq!(force_cut(rc, rc), 0.0);
+        assert_eq!(force_cut(rc + 0.5, rc), 0.0);
+        // Just inside the cutoff the shifted potential is ~continuous:
+        // |U(rc - eps) - U(rc)| = |F(rc)| * eps + O(eps^2).
+        let eps = 1e-6;
+        assert!(
+            energy_shifted(rc - eps, rc).abs() < 1e-6,
+            "shifted potential should be ~continuous just inside rc, got {}",
+            energy_shifted(rc - eps, rc)
+        );
+        // force_cut equals the Part 2 force inside the cutoff.
+        assert_eq!(force_cut(rc - eps, rc), force(rc - eps));
     }
 
 

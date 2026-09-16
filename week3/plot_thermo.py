@@ -15,8 +15,11 @@ The ``artifacts/`` folder holds two kinds of temperature ramp:
 This script draws two figures:
 
 ``evidence/magnetization.png``
-    Mean ``|M|`` against temperature for ``L = 64`` from both ramps, together
-    with Onsager's exact spontaneous magnetization of the *infinite* lattice,
+    A single mean ``|M|`` curve for ``L = 64``, spliced from the two ramps:
+    the coarse ramp outside the critical window and the window ramp inside
+    ``2.0 <= T <= 2.6`` (its points replace the coarse ones on the overlap).
+    Onsager's exact spontaneous magnetization of the *infinite* lattice is
+    drawn alongside it,
 
         M(T) = (1 - sinh(2/T)^-4)^(1/8)   for T < T_c,  0 otherwise.
 
@@ -156,8 +159,37 @@ def susceptibility(magnetization, lattice, temperature):
     return chi, float(np.sqrt(variance)), length, n_blocks, tau
 
 
+def spliced_l64():
+    """One L = 64 magnetization curve from the coarse and window ramps.
+
+    The coarse ramp supplies the full range, but the window ramp replaces it
+    on ``2.0 <= T <= 2.6`` where its many more sweeps resolve the transition.
+    The two grids overlap at the window edges, so those temperatures come
+    only from the window run.
+    """
+    pieces = []
+    for run, use in (
+        ("coarse-l64", lambda t: (t < 2.0) | (t > 2.6)),
+        ("window-l64", lambda t: (t >= 2.0) & (t <= 2.6)),
+    ):
+        temperatures, magnetizations = load_series(run)
+        for temperature in np.unique(temperatures):
+            if not use(temperature):
+                continue
+            value, error, _ = mean_abs_magnetization(
+                magnetizations[temperatures == temperature]
+            )
+            pieces.append((temperature, value, error))
+    pieces.sort()
+    return (
+        np.array([p[0] for p in pieces]),
+        np.array([p[1] for p in pieces]),
+        np.array([p[2] for p in pieces]),
+    )
+
+
 def plot_magnetization(ax):
-    """Mean |M| for L = 64 from both ramps, plus Onsager's curve."""
+    """Spliced mean |M| for L = 64, plus Onsager's infinite-lattice curve."""
     t_line = np.linspace(1.4, 3.6, 400)
     ax.plot(
         t_line,
@@ -167,31 +199,18 @@ def plot_magnetization(ax):
         label="Onsager, infinite lattice",
     )
 
-    for run, marker, color, face, label in (
-        ("coarse-l64", "o", "C0", "C0", "coarse ramp, L = 64"),
-        ("window-l64", "s", "C1", "none", "critical window, L = 64"),
-    ):
-        temperatures, magnetizations = load_series(run)
-        mean_abs, sem_abs = [], []
-        for temperature in np.unique(temperatures):
-            value, error, _ = mean_abs_magnetization(
-                magnetizations[temperatures == temperature]
-            )
-            mean_abs.append(value)
-            sem_abs.append(error)
-        ax.errorbar(
-            np.unique(temperatures),
-            mean_abs,
-            yerr=sem_abs,
-            fmt=marker,
-            markersize=4,
-            color=color,
-            markerfacecolor=face,
-            markeredgecolor=color,
-            capsize=2,
-            elinewidth=0.8,
-            label=label,
-        )
+    temperatures, mean_abs, sem_abs = spliced_l64()
+    ax.errorbar(
+        temperatures,
+        mean_abs,
+        yerr=sem_abs,
+        fmt="o",
+        markersize=4,
+        color="C0",
+        capsize=2,
+        elinewidth=0.8,
+        label="Metropolis ramp, L = 64",
+    )
 
     ax.axvline(TC, color="gray", linestyle=":", linewidth=1.0)
     ax.text(TC + 0.02, 1.01, rf"$T_c = {TC:.4f}$", fontsize=8, va="top")

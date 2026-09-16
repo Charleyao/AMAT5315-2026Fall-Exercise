@@ -140,16 +140,12 @@ def format_report(results):
         "Mean |M| at the lowest temperature",
         "-" * 44,
     ]
-    for label, run32, run64 in (
-        ("full ramp, lowest T", "coarse-l32", "coarse-l64"),
-        ("window grid, lowest T", "window-l32", "window-l64"),
-    ):
-        grid32, m32 = mean_abs_magnetization(run32)
-        grid64, m64 = mean_abs_magnetization(run64)
-        lines.append(
-            f"  {label:22s} T = {grid32[0]:.2f}: "
-            f"L = 32  {m32[0]:.6f}   L = 64  {m64[0]:.6f}"
-        )
+    grid32, m32 = mean_abs_magnetization("coarse-l32")
+    grid64, m64 = mean_abs_magnetization("coarse-l64")
+    lines.append(
+        f"  T = {grid32[0]:.2f} (coarse runs): "
+        f"L = 32  {m32[0]:.6f}   L = 64  {m64[0]:.6f}"
+    )
     return "\n".join(lines)
 
 

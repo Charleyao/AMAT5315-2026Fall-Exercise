@@ -24,5 +24,4 @@ Results
 
 Mean |M| at the lowest temperature
 --------------------------------------------
-  full ramp, lowest T    T = 1.50: L = 32  0.986513   L = 64  0.986475
-  window grid, lowest T  T = 2.00: L = 32  0.911536   L = 64  0.911420
+  T = 1.50 (coarse runs): L = 32  0.986513   L = 64  0.986475

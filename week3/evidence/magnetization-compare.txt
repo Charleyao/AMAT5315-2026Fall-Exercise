@@ -1,0 +1,37 @@
+Part 4: Metropolis vs Wolff verification
+==============================================================
+Observable: mean |M| for L = 64 on the window grid 2.00 <= T <= 2.60.
+Plotted error bars: block-bootstrap standard error, block length 4000, 500 replicates, seed = 2026.
+Block-length stability checked at 2000, 4000, 8000 (agreement if all within 10% of their mean).
+Comparison statistic: d = |mean1 - mean2| / sqrt(sigma1^2 + sigma2^2).
+Verdict: discrepancy if d > 3; agreement if d <= 3 and both errors stable; agreement provisional if either error is block-length sensitive.
+
+    T      mean M     sigma M  stable      mean W     sigma W  stable        d               verdict
+--------------------------------------------------------------
+ 2.00    0.911420  1.447466e-04    True    0.911314  7.263528e-05    True    0.654             agreement
+ 2.05    0.893046  2.862903e-04   False    0.892784  7.921611e-05   False    0.882  agreement provisional
+ 2.10    0.869247  4.101720e-04    True    0.868756  9.321324e-05   False    1.167  agreement provisional
+ 2.15    0.834584  1.001619e-03   False    0.836004  1.440981e-04   False    1.403  agreement provisional
+ 2.20    0.783757  3.587332e-03   False    0.784990  3.825036e-04   False    0.342  agreement provisional
+ 2.25    0.674777  1.103954e-02   False    0.677125  9.442947e-04   False    0.212  agreement provisional
+ 2.30    0.462890  1.926021e-02   False    0.433718  1.846598e-03    True    1.508  agreement provisional
+ 2.35    0.254215  1.209047e-02    True    0.236713  1.771994e-03   False    1.432  agreement provisional
+ 2.40    0.164172  6.308613e-03    True    0.157782  1.391753e-03   False    0.989  agreement provisional
+ 2.45    0.121637  2.845724e-03   False    0.121711  9.722218e-04   False    0.025  agreement provisional
+ 2.50    0.097299  1.906735e-03    True    0.099568  7.915958e-04   False    1.099  agreement provisional
+ 2.55    0.085005  1.905549e-03   False    0.085972  7.796355e-04   False    0.470  agreement provisional
+ 2.60    0.077313  1.539155e-03    True    0.075803  9.275478e-04   False    0.840  agreement provisional
+
+Wolff susceptibility peak
+--------------------------------------------------------------
+  T_peak(L = 32) = 2.348301
+  T_peak(L = 64) = 2.311352
+  T_c = 2*T_peak(64) - T_peak(32) = 2.274402
+  Onsager T_c = 2.26919
+  difference   = 0.005212
+
+Uncertainty discussion
+--------------------------------------------------------------
+The |M| error bars are bootstrap errors of consecutive block means, so they retain autocorrelation within each block. Near T_c the Metropolis run has long autocorrelation times and its errors are several times larger than the Wolff errors, which use a cluster flip per measurement and decorrelate much faster.
+The stability column is 'True' when the 2000/4000/8000 bootstrap errors agree within 10% of their mean. Where it is 'False' the error is block-length sensitive, and the agreement verdict is downgraded to provisional even when d <= 3.
+The Wolff T_peak fit inherits the resolution of the 0.05 temperature grid and the statistical uncertainty of chi(T); no bootstrap error is quoted for it here.

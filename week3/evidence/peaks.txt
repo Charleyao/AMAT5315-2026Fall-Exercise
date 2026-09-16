@@ -1,0 +1,28 @@
+Part 2 peak analysis: five-point quadratic
+============================================
+Susceptibility chi(T) = L^2 (<M^2> - <|M|>^2) / T
+Window ramps 2.00 <= T <= 2.60, dT = 0.05, 100000 sweeps per T.
+
+L = 32
+  grid maximum : chi = 20.0226 at T = 2.35
+  fit points   : 2.25, 2.30, 2.35, 2.40, 2.45
+  quadratic    : chi = -880.812162 T^2 + 4141.869951 T + -4849.581524
+  T_peak       : 2.351165
+
+L = 64
+  grid maximum : chi = 61.4722 at T = 2.30
+  fit points   : 2.20, 2.25, 2.30, 2.35, 2.40
+  quadratic    : chi = -3994.598380 T^2 + 18473.104186 T + -21303.906496
+  T_peak       : 2.312261
+
+Results
+--------------------------------------------
+  T_peak(L = 32) = 2.351165
+  T_peak(L = 64) = 2.312261
+  T_c = 2*T_peak(64) - T_peak(32) = 2.273356
+  (Onsager T_c = 2.269185)
+
+Mean |M| at the lowest temperature
+--------------------------------------------
+  full ramp, lowest T    T = 1.50: L = 32  0.986513   L = 64  0.986475
+  window grid, lowest T  T = 2.00: L = 32  0.911536   L = 64  0.911420

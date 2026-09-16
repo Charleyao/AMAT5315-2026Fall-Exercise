@@ -29,9 +29,24 @@ Wolff susceptibility peak
   T_c = 2*T_peak(64) - T_peak(32) = 2.274402
   Onsager T_c = 2.26919
   difference   = 0.005212
+Wolff T_c block bootstrap
+--------------------------------------------------------------
+Block lengths are in cluster moves; 500 bootstrap replicates per block length. For each replicate chi(T) is recomputed from resampled blocks, the five-point quadratic peak is refit, and T_c = 2*T_peak(64) - T_peak(32).
+
+  block    mean T_c     std T_c   used
+   2000    2.274354    0.000688    500
+   4000    2.274409    0.000680    500
+   8000    2.274440    0.000585    500
+
+Stability of the sampling error
+--------------------------------------------------------------
+  std T_c: 2000: 0.000688, 4000: 0.000680, 8000: 0.000585
+  mean std      = 0.000651
+  spread from mean = 10.2%
+  verdict: UNRESOLVED (block lengths disagree by more than 10%)
 
 Uncertainty discussion
 --------------------------------------------------------------
 The |M| error bars are bootstrap errors of consecutive block means, so they retain autocorrelation within each block. Near T_c the Metropolis run has long autocorrelation times and its errors are several times larger than the Wolff errors, which use a cluster flip per measurement and decorrelate much faster.
 The stability column is 'True' when the 2000/4000/8000 bootstrap errors agree within 10% of their mean. Where it is 'False' the error is block-length sensitive, and the agreement verdict is downgraded to provisional even when d <= 3.
-The Wolff T_peak fit inherits the resolution of the 0.05 temperature grid and the statistical uncertainty of chi(T); no bootstrap error is quoted for it here.
+The Wolff T_peak fit inherits the resolution of the 0.05 temperature grid and the statistical uncertainty of chi(T); its sampling error is quantified by the block bootstrap in the section above.

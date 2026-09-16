@@ -14,6 +14,7 @@ from compare_metropolis_wolff import (  # noqa: E402
     agreement_verdict,
     block_bootstrap_error,
     d_statistic,
+    wolff_tc_bootstrap_summary,
 )
 
 
@@ -80,3 +81,32 @@ def test_block_bootstrap_error_requires_at_least_two_blocks():
 
     with pytest.raises(ValueError):
         block_bootstrap_error(series, block_length=8, n_boot=50, rng=rng)
+
+
+def test_wolff_tc_bootstrap_summary_is_stable_for_equal_stds():
+    """Equal block-length standard errors are reported as stable."""
+    results = {
+        2000: {"mean_tc": 2.274, "std_tc": 0.0010, "valid": 500},
+        4000: {"mean_tc": 2.274, "std_tc": 0.0010, "valid": 500},
+        8000: {"mean_tc": 2.274, "std_tc": 0.0010, "valid": 500},
+    }
+
+    summary = wolff_tc_bootstrap_summary(results)
+
+    assert summary["stable"] is True
+    assert summary["stds"] == [0.0010, 0.0010, 0.0010]
+    assert summary["std_plot"] == pytest.approx(0.0010)
+
+
+def test_wolff_tc_bootstrap_summary_is_unstable_for_a_spread():
+    """A block length that disagrees by more than 10% is unstable."""
+    results = {
+        2000: {"mean_tc": 2.274, "std_tc": 0.0010, "valid": 500},
+        4000: {"mean_tc": 2.274, "std_tc": 0.0010, "valid": 500},
+        8000: {"mean_tc": 2.274, "std_tc": 0.0005, "valid": 500},
+    }
+
+    summary = wolff_tc_bootstrap_summary(results)
+
+    assert summary["stable"] is False
+    assert summary["std_plot"] == pytest.approx(0.0010)

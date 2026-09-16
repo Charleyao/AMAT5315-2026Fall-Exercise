@@ -112,6 +112,89 @@ def stable_errors(errors, tolerance=STABILITY_TOLERANCE):
     )
 
 
+def wolff_tc_bootstrap(block_lengths=BLOCK_LENGTHS, seed=SEED):
+    """Block-bootstrap the Wolff five-point T_c estimate.
+
+    ``bootstrap.run_block_length`` repeats, for each bootstrap replicate, the
+    full Part 2 procedure: recompute chi from resampled blocks, refit the
+    five-point quadratic around the largest chi, then
+    ``T_c = 2*T_peak(64) - T_peak(32)``.  It runs once per requested block
+    length, always with 500 replicates (``bootstrap.N_BOOT``).
+    """
+    series = {
+        lattice: series_by_temperature(f"wolff-l{lattice}")
+        for lattice in (32, 64)
+    }
+    temperatures = np.array(sorted(series[32]), dtype=float)
+    rng = np.random.default_rng(seed)
+    return {
+        block_length: bootstrap.run_block_length(
+            series, temperatures, block_length, rng
+        )
+        for block_length in block_lengths
+    }
+
+
+def wolff_tc_bootstrap_summary(
+    results, block_lengths=BLOCK_LENGTHS, tolerance=STABILITY_TOLERANCE
+):
+    """Extract T_c bootstrap stds and the 10% stability verdict."""
+    stds = [results[block_length]["std_tc"] for block_length in block_lengths]
+    mean_std = float(np.mean(stds))
+    stable = bootstrap.sampling_error_stable(stds, tolerance=tolerance)
+    if mean_std > 0.0:
+        spread = float(max(abs(s - mean_std) for s in stds) / mean_std)
+    else:
+        spread = float("nan")
+    return {
+        "stds": stds,
+        "stable": stable,
+        "mean_std": mean_std,
+        "spread": spread,
+        "std_plot": results[PLOT_BLOCK_LENGTH]["std_tc"],
+    }
+
+
+def format_wolff_tc_bootstrap(results, summary):
+    """Text block reporting the Wolff T_c bootstrap standard errors."""
+    lines = [
+        "Wolff T_c block bootstrap",
+        "-" * 62,
+        (
+            "Block lengths are in cluster moves; 500 bootstrap replicates per "
+            "block length. For each replicate chi(T) is recomputed from "
+            "resampled blocks, the five-point quadratic peak is refit, and "
+            "T_c = 2*T_peak(64) - T_peak(32)."
+        ),
+        "",
+        f"{'block':>7s}  {'mean T_c':>10s}  {'std T_c':>10s}  {'used':>5s}",
+    ]
+    for block_length in BLOCK_LENGTHS:
+        result = results[block_length]
+        lines.append(
+            f"{block_length:>7d}  {result['mean_tc']:>10.6f}  "
+            f"{result['std_tc']:>10.6f}  {result['valid']:>5d}"
+        )
+    lines += [
+        "",
+        "Stability of the sampling error",
+        "-" * 62,
+        "  std T_c: "
+        + ", ".join(
+            f"{block_length}: {results[block_length]['std_tc']:.6f}"
+            for block_length in BLOCK_LENGTHS
+        ),
+        f"  mean std      = {summary['mean_std']:.6f}",
+        f"  spread from mean = {summary['spread']:.1%}",
+        (
+            "  verdict: STABLE (all within 10% of their mean)"
+            if summary["stable"]
+            else "  verdict: UNRESOLVED (block lengths disagree by more than 10%)"
+        ),
+    ]
+    return "\n".join(lines)
+
+
 def load_means_and_errors(run, temperatures, rng):
     """Mean ``|M|`` and per-block-length bootstrap errors for one run."""
     series_by_temperature_ = series_by_temperature(run)
@@ -173,7 +256,7 @@ def panel1(ax, temperatures, metro_means, wolff_means, metro_errors, wolff_error
     ax.legend(fontsize=8)
 
 
-def panel2(ax, results):
+def panel2(ax, results, wolff_summary=None):
     """Wolff chi(T) with five-point fits and marked peak/critical values."""
     for lattice, color in ((32, "C0"), (64, "C1")):
         data = results[lattice]
@@ -206,10 +289,19 @@ def panel2(ax, results):
 
     tc = results["tc"]
     ax.axvline(tc, color="C3", linestyle="--", linewidth=1.1)
+    if wolff_summary is None:
+        tc_text = rf"$T_c = 2T_{{\rm peak}}(64) - T_{{\rm peak}}(32) = {tc:.4f}$"
+    else:
+        stability = "stable" if wolff_summary["stable"] else "block-length sensitive"
+        tc_text = (
+            rf"$T_c = {tc:.4f} \pm {wolff_summary['std_plot']:.4f}$ "
+            f"(bootstrap, block {PLOT_BLOCK_LENGTH})\n"
+            f"stability: {stability}"
+        )
     ax.text(
         tc + 0.008,
         0.03,
-        rf"$T_c = 2T_{{\rm peak}}(64) - T_{{\rm peak}}(32) = {tc:.4f}$",
+        tc_text,
         transform=ax.get_xaxis_transform(),
         fontsize=8,
         va="bottom",
@@ -262,7 +354,10 @@ def wolff_panel2_results():
     return results
 
 
-def format_report(temperatures, metro, wolff, panel2_results):
+def format_report(
+    temperatures, metro, wolff, panel2_results,
+    wolff_boot_results=None, wolff_summary=None,
+):
     """Plain-text table of the comparison and the Wolff peak analysis."""
     means_m, errors_m = metro
     means_w, errors_w = wolff
@@ -338,6 +433,10 @@ def format_report(temperatures, metro, wolff, panel2_results):
         f"  T_c = 2*T_peak(64) - T_peak(32) = {tc:.6f}",
         f"  Onsager T_c = {ONSAGER_TC:.5f}",
         f"  difference   = {abs(tc - ONSAGER_TC):.6f}",
+    ]
+    if wolff_boot_results is not None and wolff_summary is not None:
+        lines.append(format_wolff_tc_bootstrap(wolff_boot_results, wolff_summary))
+    lines += [
         "",
         "Uncertainty discussion",
         "-" * 62,
@@ -356,8 +455,8 @@ def format_report(temperatures, metro, wolff, panel2_results):
         ),
         (
             "The Wolff T_peak fit inherits the resolution of the 0.05 temperature "
-            "grid and the statistical uncertainty of chi(T); no bootstrap error "
-            "is quoted for it here."
+            "grid and the statistical uncertainty of chi(T); its sampling error "
+            "is quantified by the block bootstrap in the section above."
         ),
     ]
     return "\n".join(lines)
@@ -377,15 +476,20 @@ def main():
     metro = load_means_and_errors(metro_run, temperatures, rng)
     wolff = load_means_and_errors(wolff_run, temperatures, rng)
     panel2_results = wolff_panel2_results()
+    wolff_boot_results = wolff_tc_bootstrap()
+    wolff_summary = wolff_tc_bootstrap_summary(wolff_boot_results)
 
-    report = format_report(temperatures, metro, wolff, panel2_results)
+    report = format_report(
+        temperatures, metro, wolff, panel2_results,
+        wolff_boot_results, wolff_summary,
+    )
     print(report)
     report_path = EVIDENCE / "magnetization-compare.txt"
     report_path.write_text(report + "\n")
 
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.2), constrained_layout=True)
     panel1(axes[0], temperatures, metro[0], wolff[0], metro[1], wolff[1])
-    panel2(axes[1], panel2_results)
+    panel2(axes[1], panel2_results, wolff_summary)
     figure_path = EVIDENCE / "magnetization-compare.png"
     fig.savefig(figure_path, dpi=150, bbox_inches="tight")
     plt.close(fig)

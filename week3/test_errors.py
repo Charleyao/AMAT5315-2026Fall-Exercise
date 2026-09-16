@@ -11,6 +11,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
 from errors import (  # noqa: E402
+    autocorrelation_function,
+    block_error_by_length,
     block_standard_error,
     integrated_autocorrelation_time,
     naive_standard_error,
@@ -37,6 +39,28 @@ def test_block_standard_error_is_error_of_block_means():
     block_means = samples.reshape(50, 20).mean(axis=1)
     expected = block_means.std(ddof=1) / np.sqrt(50)
     assert value == pytest.approx(expected)
+
+
+def test_autocorrelation_function_starts_at_one():
+    """rho(0) is normalised to 1, and white noise decorrelates quickly."""
+    rng = np.random.default_rng(3)
+    samples = rng.normal(size=5000)
+
+    rho = autocorrelation_function(samples)
+
+    assert rho[0] == pytest.approx(1.0)
+    assert abs(rho[10]) < 0.1
+
+
+def test_block_error_of_length_one_is_the_naive_error():
+    """With block length 1 the block error equals the naive standard error."""
+    rng = np.random.default_rng(11)
+    samples = rng.normal(size=4000)
+
+    value, n_blocks = block_error_by_length(samples, 1)
+
+    assert n_blocks == samples.size
+    assert value == pytest.approx(naive_standard_error(samples))
 
 
 def test_tau_int_of_white_noise_is_near_one_half():

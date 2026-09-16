@@ -50,29 +50,37 @@ WINDOW_FACTOR = 6.0
 LATTICES = (32, 64)
 
 
+def autocorrelation_function(samples):
+    """Normalised autocorrelation ``rho(t)`` for lags ``t = 0 .. N-1``.
+
+    ``rho`` is computed from the autocovariance via an FFT and normalised so
+    that ``rho(0) = 1``.  A constant series has no fluctuations, so it returns
+    ``[1.0]``.
+    """
+    x = np.asarray(samples, dtype=float)
+    n = x.size
+    if n < 2:
+        return np.array([1.0])
+
+    x = x - x.mean()
+    variance = float(np.dot(x, x)) / n
+    if variance == 0.0:
+        return np.array([1.0])
+
+    spectrum = np.fft.rfft(x, n=2 * n)
+    acf = np.fft.irfft(spectrum * np.conjugate(spectrum), n=2 * n)[:n]
+    return acf / (variance * n)
+
+
 def integrated_autocorrelation_time(samples, window_factor=WINDOW_FACTOR):
     """Integrated autocorrelation time ``1/2 + sum_{t>=1} rho(t)``.
 
     The sum is cut off with the learning-sheet rule: stop at the first lag
     that is larger than ``window_factor`` times the running estimate.
-    ``rho`` is computed from the autocovariance via an FFT.
     """
-    x = np.asarray(samples, dtype=float)
-    n = x.size
-    if n < 2:
-        return 0.5
-
-    x = x - x.mean()
-    variance = float(np.dot(x, x)) / n
-    if variance == 0.0:
-        return 0.5
-
-    spectrum = np.fft.rfft(x, n=2 * n)
-    acf = np.fft.irfft(spectrum * np.conjugate(spectrum), n=2 * n)[:n]
-    acf /= variance * n  # normalise so that acf[0] == 1 (rho(0))
-
+    acf = autocorrelation_function(samples)
     tau = 0.5
-    for lag in range(1, n):
+    for lag in range(1, acf.size):
         if lag > window_factor * tau:
             break
         tau += float(acf[lag])
@@ -98,6 +106,25 @@ def block_standard_error(samples, n_blocks=N_BLOCKS):
     blocks = x[: length * n_blocks].reshape(n_blocks, length)
     block_means = blocks.mean(axis=1)
     return float(block_means.std(ddof=1) / np.sqrt(n_blocks)), length
+
+
+def block_error_by_length(samples, block_length):
+    """Standard error of consecutive block averages of a given length.
+
+    Returns ``(error, n_blocks)``.  ``block_length = 1`` reproduces the naive
+    standard error because every sample is then its own block.
+    """
+    if block_length < 1:
+        raise ValueError("block_length must be at least 1")
+    x = np.asarray(samples, dtype=float)
+    n_blocks = x.size // block_length
+    if n_blocks < 2:
+        raise ValueError(
+            f"need at least 2 blocks of length {block_length} (got {n_blocks})"
+        )
+    blocks = x[: n_blocks * block_length].reshape(n_blocks, block_length)
+    block_means = blocks.mean(axis=1)
+    return float(block_means.std(ddof=1) / np.sqrt(n_blocks)), n_blocks
 
 
 def series_by_temperature(run):

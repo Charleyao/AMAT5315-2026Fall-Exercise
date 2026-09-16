@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 target/
 artifacts/
+week3/runs/

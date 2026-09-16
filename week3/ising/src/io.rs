@@ -26,7 +26,7 @@ pub fn write_output(out: &Path, report: &Report) -> std::io::Result<()> {
     std::fs::write(out.join("run.json"), run_json + "\n")?;
     std::fs::write(out.join("series.jsonl"), jsonl(&report.series)?)?;
 
-    if report.meta.sample_every > 0 {
+    if report.frame_every > 0 {
         std::fs::write(out.join("spins.jsonl"), jsonl(&report.frames)?)?;
     } else {
         // Do not leave a stale frame file from an earlier run beside fresh data.
@@ -72,7 +72,11 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(dir.join("run.json")).unwrap()).unwrap();
         assert_eq!(meta["L"].as_u64(), Some(4));
         assert_eq!(meta["update"].as_str(), Some("metropolis"));
-        assert_eq!(meta["sample_every"].as_u64(), Some(2));
+        assert_eq!(
+            meta["sample_every"].as_u64(),
+            Some(1),
+            "fixed by the design"
+        );
         assert_eq!(meta["time_unit"].as_str(), Some("sweep"));
         assert_eq!(meta["t_grid"].as_array().unwrap().len(), 1);
 

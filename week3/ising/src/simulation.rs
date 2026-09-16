@@ -66,6 +66,8 @@ pub struct RunMeta {
     pub discard: usize,
     pub measure: usize,
     pub seed: u64,
+    /// Fixed at 1 by the design; the frame interval is a separate `--every`
+    /// argument and is not recorded here.
     pub sample_every: usize,
     pub time_unit: String,
 }
@@ -113,6 +115,8 @@ pub struct Report {
     pub summaries: Vec<TempSummary>,
     pub series: Vec<SeriesLine>,
     pub frames: Vec<SpinLine>,
+    /// Recording interval for `frames`, i.e. the `--every` argument.
+    pub frame_every: usize,
 }
 
 /// Round to six decimal places, the precision used in the output files.
@@ -229,7 +233,7 @@ pub fn simulate(cfg: &Config) -> Report {
         discard: cfg.discard,
         measure: cfg.measure,
         seed: cfg.seed,
-        sample_every: cfg.every,
+        sample_every: 1,
         time_unit: cfg.update.time_unit().to_string(),
     };
 
@@ -238,6 +242,7 @@ pub fn simulate(cfg: &Config) -> Report {
         summaries,
         series,
         frames,
+        frame_every: cfg.every,
     }
 }
 
@@ -265,6 +270,13 @@ mod tests {
         assert_eq!(temperature_grid(1.5, 1.7, 0.1), vec![1.5, 1.6, 1.7]);
         assert_eq!(temperature_grid(1.5, 1.75, 0.1), vec![1.5, 1.6, 1.7]);
         assert_eq!(temperature_grid(2.0, 2.0, 0.1), vec![2.0]);
+    }
+
+    #[test]
+    fn sample_every_is_fixed_at_one_independently_of_every() {
+        let report = simulate(&config(Update::Metropolis)); // every = 2
+        assert_eq!(report.meta.sample_every, 1);
+        assert_eq!(report.frame_every, 2);
     }
 
     #[test]

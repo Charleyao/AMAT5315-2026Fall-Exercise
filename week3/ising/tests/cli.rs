@@ -55,7 +55,11 @@ fn run_writes_expected_files_and_stdout() {
     assert_eq!(meta["L"].as_u64(), Some(4));
     assert_eq!(meta["t_grid"].as_array().unwrap().len(), 3);
     assert_eq!(meta["time_unit"].as_str(), Some("sweep"));
-    assert_eq!(meta["sample_every"].as_u64(), Some(2));
+    assert_eq!(
+        meta["sample_every"].as_u64(),
+        Some(1),
+        "fixed by the design"
+    );
 
     let series = std::fs::read_to_string(dir.join("series.jsonl")).unwrap();
     assert_eq!(
@@ -92,6 +96,11 @@ fn every_zero_writes_no_spins_file() {
     assert!(dir.join("run.json").exists());
     assert!(dir.join("series.jsonl").exists());
     assert!(!dir.join("spins.jsonl").exists());
+
+    // `sample_every` is the fixed design constant, independent of --every.
+    let meta: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("run.json")).unwrap()).unwrap();
+    assert_eq!(meta["sample_every"].as_u64(), Some(1));
 
     let _ = std::fs::remove_dir_all(&dir);
 }

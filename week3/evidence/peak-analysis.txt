@@ -1,0 +1,26 @@
+Part 2 peak analysis of the Ising susceptibility
+===============================================
+Window ramps 2.0 <= T <= 2.6, dT = 0.05, 100000 sweeps per T.
+Peak = weighted parabola through the three points around the
+largest measured chi; errors are jackknife statistical errors.
+
+L = 32
+  grid peak    chi = 20.04 at T = 2.35
+  parabola     chi* = 20.14 +- 0.52 at T* = 2.3410 +- 0.0068
+  fit uses     T = 2.30, 2.35, 2.40
+
+L = 64
+  grid peak    chi = 61.17 at T = 2.30
+  parabola     chi* = 61.69 +- 5.33 at T* = 2.3074 +- 0.0039
+  fit uses     T = 2.25, 2.30, 2.35
+
+Finite-size scaling (two sizes, nu fixed to 1 for Tc)
+-----------------------------------------------
+  chi*(64)/chi*(32) = 3.063 +- 0.276
+  implied gamma/nu  = 1.615 +- 0.130   (exact 7/4 = 1.750)
+  T*(32) - T*(64)   = 0.0337 +- 0.0078
+  T_c (nu = 1)      = 2.2737 +- 0.0104
+  Onsager T_c       = 2.2692
+
+Statistical errors only; the dT = 0.05 grid and finite-size
+rounding are systematic and are not included.

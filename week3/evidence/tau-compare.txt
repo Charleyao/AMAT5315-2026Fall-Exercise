@@ -1,0 +1,12 @@
+Part 4: work-normalized autocorrelation time at T = 2.30
+==============================================================
+L = 64; Metropolis run window-l64, Wolff run wolff-l64.
+tau_int = 1/2 + sum_{t>=1} rho(t), truncated with the six-times-running-tau rule.
+Work conversion: Metropolis tau_work = tau_int (sweeps); Wolff tau_work = tau_moves * <c> / L^2.
+
+  Metropolis tau_int (sweeps)          = 550.134
+  Metropolis tau_work (sweeps)         = 550.134
+  Wolff tau_int (cluster moves)        = 4.465
+  Wolff mean cluster size <c>          = 927.146
+  Wolff tau_work (sweeps)              = 1.0107
+  ratio tau_work(Metropolis)/tau_work(Wolff) = 544.3

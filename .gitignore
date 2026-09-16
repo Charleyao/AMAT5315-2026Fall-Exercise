@@ -4,3 +4,4 @@ __pycache__/
 target/
 artifacts/
 week3/runs/
+*:Zone.Identifier

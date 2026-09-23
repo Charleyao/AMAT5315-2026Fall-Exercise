@@ -1,0 +1,6 @@
+Part 2 Taylor-Green t = 0 -> t = 1
+case = taylor-green, n = 64, method = rk4, nu = 0.1, dt = 0.01, t_end = 1.0, snapshot_every = 0.1
+snapshots stored: 11
+theory t = 1: E = 0.167580, Z = 0.335160
+relative velocity error (last frame vs exact t = 1) = 7.039e-07
+figure: evidence/taylor-green.png

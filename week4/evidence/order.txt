@@ -1,0 +1,12 @@
+Part 4 Taylor-Green RK4 order
+n = 8, nu = 0.5, t_end = 2, relative velocity error at t = 2
+
+      dt    relative error
+     0.4      5.986617e-04
+    0.25      7.879896e-05
+     0.2      3.574224e-05
+
+fitted RK4 order p = 4.1044
+error(dt=0.4)/error(dt=0.2) = 16.7494  (fourth order predicts 16)
+within +/-15% of 4: yes
+figure: evidence/order.png

@@ -1,0 +1,15 @@
+Part 3 standard random flow
+n = 128, seed = 2026, k_band = [2, 6], method = rk4, nu = 0.004, dt = 0.01, t_end = 10.0, snapshot_every = 0.1
+snapshots stored: 101
+
+t        E            Z
+0        0.500000     6.634685    
+2        0.413086     4.146925    
+5        0.343182     2.023506    
+10       0.288039     0.956306    
+
+energy reduction factor   E(0)/E(10) = 1.736  (E(10)/E(0) = 0.576)
+enstrophy reduction factor Z(0)/Z(10) = 6.938  (Z(10)/Z(0) = 0.144)
+initial U_max = 2.2953
+shared vorticity scale: +/-11.4457
+figure: evidence/random.png

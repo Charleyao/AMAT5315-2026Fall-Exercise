@@ -1,0 +1,9 @@
+Part 1 line stability
+n = 64, c = 1.0, nu = 0.05
+RK4 real-axis crossing  = -2.785294
+RK4 imaginary crossing  = 2.828427
+RK4 line dt_crit        = 0.049386
+dt = 0.045: max_k |R(lambda_k dt)| = 0.997753, dominant k = 1
+dt = 0.056: max_k |R(lambda_k dt)| = 1.850495, dominant k = 31
+Nyquist fourier_d1 max (library check) = 0.000e+00
+figure: evidence/line-stability.png

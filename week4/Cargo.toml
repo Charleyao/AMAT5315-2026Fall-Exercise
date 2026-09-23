@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 rustfft = "6.4.1"
+
+[[bin]]
+name = "line-stability-data"
+path = "scripts/line_stability_data.rs"

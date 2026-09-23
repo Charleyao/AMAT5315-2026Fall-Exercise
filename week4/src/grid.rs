@@ -7,6 +7,20 @@
 
 use std::f64::consts::PI;
 
+use rustfft::{FftPlanner, num_complex::Complex};
+
+/// FFT wavenumber ordering for an even grid size `n`.
+///
+/// `rustfft` returns the positive frequencies first, then the negative ones, so
+/// the index-to-wavenumber map is `0, 1, ..., n/2-1, -n/2, ..., -2, -1`.
+/// For `n = 8` this is `[0, 1, 2, 3, -4, -3, -2, -1]`.
+pub fn fft_wavenumbers(n: usize) -> Vec<f64> {
+    assert!(n % 2 == 0, "FFT wavenumber ordering assumes an even n, got {n}");
+    (0..n)
+        .map(|i| if i < n / 2 { i as f64 } else { i as f64 - n as f64 })
+        .collect()
+}
+
 /// A uniform periodic grid with `n` points on `[0, 2*pi)`.
 pub struct PeriodicGrid {
     n: usize,
@@ -82,6 +96,61 @@ impl PeriodicGrid {
                 (u[self.right(j)] - 2.0 * u[j] + u[self.left(j)]) / (self.dx * self.dx)
             })
             .collect()
+    }
+
+    /// The wavenumbers this grid's FFT indices correspond to.
+    pub fn wavenumbers(&self) -> Vec<f64> {
+        fft_wavenumbers(self.n)
+    }
+
+    /// Forward FFT, unnormalised (rustfft convention).
+    fn forward(&self, u: &[f64]) -> Vec<Complex<f64>> {
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(self.n);
+        let mut buf: Vec<Complex<f64>> = u.iter().map(|&v| Complex::new(v, 0.0)).collect();
+        fft.process(&mut buf);
+        buf
+    }
+
+    /// Inverse FFT of a spectrum, normalised by `1/n` so it inverts [`Self::forward`].
+    fn inverse_real(&self, mut uh: Vec<Complex<f64>>) -> Vec<f64> {
+        let mut planner = FftPlanner::new();
+        let ifft = planner.plan_fft_inverse(self.n);
+        ifft.process(&mut uh);
+        let inv_n = 1.0 / self.n as f64;
+        uh.iter().map(|c| c.re * inv_n).collect()
+    }
+
+    /// Spectral first derivative: multiply mode `k` by `i k`, then invert.
+    ///
+    /// The Nyquist mode `k = -n/2` is not represented by a derivative on the grid
+    /// (the two-point stencil there is degenerate), so its multiplier is set to
+    /// zero and it does not propagate.
+    pub fn fourier_d1(&self, u: &[f64]) -> Vec<f64> {
+        assert_eq!(u.len(), self.n, "u has {} entries, grid has {}", u.len(), self.n);
+        let k = self.wavenumbers();
+        let mut uh = self.forward(u);
+        for (i, c) in uh.iter_mut().enumerate() {
+            if i == self.n / 2 {
+                *c = Complex::new(0.0, 0.0);
+            } else {
+                *c *= Complex::new(0.0, k[i]);
+            }
+        }
+        self.inverse_real(uh)
+    }
+
+    /// Spectral second derivative: multiply mode `k` by `-k^2`, then invert.
+    ///
+    /// Unlike the first derivative, the Nyquist mode keeps its `-k^2` multiplier.
+    pub fn fourier_d2(&self, u: &[f64]) -> Vec<f64> {
+        assert_eq!(u.len(), self.n, "u has {} entries, grid has {}", u.len(), self.n);
+        let k = self.wavenumbers();
+        let mut uh = self.forward(u);
+        for (i, c) in uh.iter_mut().enumerate() {
+            *c *= Complex::new(-k[i] * k[i], 0.0);
+        }
+        self.inverse_real(uh)
     }
 }
 
@@ -176,5 +245,97 @@ mod tests {
         let err_f = max_abs_error(&fine.d1(&sample(&fine, f64::sin)), &sample(&fine, f64::cos));
         let ratio = err_c / err_f;
         assert!((ratio - 4.0).abs() < 0.5, "error ratio = {ratio}, expected ~4");
+    }
+
+    // --------------------------------------------------------------- Fourier
+
+    #[test]
+    fn fft_wavenumber_ordering_is_the_rfft_order() {
+        assert_eq!(
+            fft_wavenumbers(8),
+            vec![0.0, 1.0, 2.0, 3.0, -4.0, -3.0, -2.0, -1.0]
+        );
+        let n = 32;
+        let k = fft_wavenumbers(n);
+        assert_eq!(k[0], 0.0);
+        assert_eq!(k[n / 2 - 1], (n / 2 - 1) as f64);
+        assert_eq!(k[n / 2], -(n as f64) / 2.0); // Nyquist
+        assert_eq!(k[n - 1], -1.0);
+    }
+
+    #[test]
+    fn fourier_d1_of_a_constant_is_zero() {
+        let g = PeriodicGrid::new(32);
+        let u = vec![2.5; g.len()];
+        let err = max_abs_error(&g.fourier_d1(&u), &vec![0.0; g.len()]);
+        assert!(err < 1e-12, "max |Fourier d1 constant| = {err}");
+    }
+
+    #[test]
+    fn fourier_d1_annihilates_the_nyquist_mode() {
+        // The Nyquist mode on this grid: u_j = cos(pi j) = (-1)^j.
+        let n = 32;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (n as f64 / 2.0 * x).cos());
+        let err = max_abs_error(&g.fourier_d1(&u), &vec![0.0; n]);
+        println!("n = {n}, max |Fourier d1(Nyquist)| = {err:e}");
+        assert!(err < 1e-10, "Nyquist first derivative is not zero: {err}");
+    }
+
+    #[test]
+    fn fourier_d2_keeps_the_nyquist_mode() {
+        // The second derivative of cos((n/2) x) is -(n/2)^2 cos((n/2) x): the
+        // Nyquist mode must not be zeroed.
+        let n = 32;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (n as f64 / 2.0 * x).cos());
+        let want: Vec<f64> = u.iter().map(|&v| -(n as f64 / 2.0).powi(2) * v).collect();
+        let err = max_abs_error(&g.fourier_d2(&u), &want);
+        println!("n = {n}, max |Fourier d2(Nyquist) + (n/2)^2 Nyquist| = {err:e}");
+        assert!(err < 1e-9, "Nyquist second derivative is wrong: {err}");
+    }
+
+    #[test]
+    fn fourier_d1_of_sin3_is_3_cos3() {
+        let n = 64;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (3.0 * x).sin());
+        let want = sample(&g, |x| 3.0 * (3.0 * x).cos());
+        let err = max_abs_error(&g.fourier_d1(&u), &want);
+        println!("n = {n}, max |Fourier d1(sin 3x) - 3 cos 3x| = {err:e}");
+        assert!(err < 1e-10, "Fourier d1(sin 3x) error = {err}");
+    }
+
+    #[test]
+    fn fourier_d2_of_sin3_is_minus_9_sin3() {
+        let n = 64;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (3.0 * x).sin());
+        let want = sample(&g, |x| -9.0 * (3.0 * x).sin());
+        let err = max_abs_error(&g.fourier_d2(&u), &want);
+        println!("n = {n}, max |Fourier d2(sin 3x) + 9 sin 3x| = {err:e}");
+        assert!(err < 1e-10, "Fourier d2(sin 3x) error = {err}");
+    }
+
+    #[test]
+    fn fourier_d1_of_cos2_is_minus_2_sin2() {
+        let n = 64;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (2.0 * x).cos());
+        let want = sample(&g, |x| -2.0 * (2.0 * x).sin());
+        let err = max_abs_error(&g.fourier_d1(&u), &want);
+        println!("n = {n}, max |Fourier d1(cos 2x) + 2 sin 2x| = {err:e}");
+        assert!(err < 1e-10, "Fourier d1(cos 2x) error = {err}");
+    }
+
+    #[test]
+    fn fourier_d2_of_cos2_is_minus_4_cos2() {
+        let n = 64;
+        let g = PeriodicGrid::new(n);
+        let u = sample(&g, |x| (2.0 * x).cos());
+        let want = sample(&g, |x| -4.0 * (2.0 * x).cos());
+        let err = max_abs_error(&g.fourier_d2(&u), &want);
+        println!("n = {n}, max |Fourier d2(cos 2x) + 4 cos 2x| = {err:e}");
+        assert!(err < 1e-10, "Fourier d2(cos 2x) error = {err}");
     }
 }

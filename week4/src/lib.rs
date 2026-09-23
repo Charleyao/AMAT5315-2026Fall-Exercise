@@ -1,3 +1,4 @@
+pub mod advdiff;
 pub mod grid;
 
 pub trait Integrator {

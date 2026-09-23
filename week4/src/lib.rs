@@ -105,6 +105,59 @@ impl Integrator for RK4 {
 }
 
 // ============================================================
+// Equal-weight four-stage RK (control method, not classical RK4)
+// ============================================================
+
+/// A deliberately wrong four-stage Runge-Kutta control method.
+///
+/// The stage locations are exactly classical RK4's
+/// (`k1 = F(y)`, `k2 = F(y + dt k1/2)`, `k3 = F(y + dt k2/2)`, `k4 = F(y + dt k3)`)
+/// but the update uses equal weights `(k1 + k2 + k3 + k4)/4` instead of
+/// `(k1 + 2 k2 + 2 k3 + k4)/6`. It is only a second-order control for the
+/// accuracy experiment; classical [`RK4`] is untouched.
+pub struct EqualWeightRK4;
+
+impl Integrator for EqualWeightRK4 {
+    fn step<F>(&self, y: &[f64], dt: f64, rhs: F) -> Vec<f64>
+    where
+        F: Fn(&[f64]) -> Vec<f64>,
+    {
+        let k1 = rhs(y);
+
+        let y2: Vec<f64> = y
+            .iter()
+            .zip(k1.iter())
+            .map(|(yi, k1i)| yi + 0.5 * dt * k1i)
+            .collect();
+        let k2 = rhs(&y2);
+
+        let y3: Vec<f64> = y
+            .iter()
+            .zip(k2.iter())
+            .map(|(yi, k2i)| yi + 0.5 * dt * k2i)
+            .collect();
+        let k3 = rhs(&y3);
+
+        let y4: Vec<f64> = y
+            .iter()
+            .zip(k3.iter())
+            .map(|(yi, k3i)| yi + dt * k3i)
+            .collect();
+        let k4 = rhs(&y4);
+
+        y.iter()
+            .zip(k1.iter())
+            .zip(k2.iter())
+            .zip(k3.iter())
+            .zip(k4.iter())
+            .map(|((((yi, k1i), k2i), k3i), k4i)| {
+                yi + dt / 4.0 * (k1i + k2i + k3i + k4i)
+            })
+            .collect()
+    }
+}
+
+// ============================================================
 // Tests
 // ============================================================
 
@@ -150,6 +203,18 @@ mod tests {
         // 1 - dt + dt^2/2 - dt^3/6 + dt^4/24, the 4th-order Taylor of exp(-dt)
         let want = 1.0 - dt + dt * dt / 2.0 - dt * dt * dt / 6.0 + dt.powi(4) / 24.0;
         assert_close(&y1, &[want], 1e-12);
+    }
+
+    #[test]
+    fn equal_weight_rk4_takes_one_step_of_y_prime_equals_minus_y() {
+        let dt = 0.1;
+        let y1 = EqualWeightRK4.step(&[1.0], dt, neg);
+        // Equal weights: 1 - dt + dt^2/2 - 3 dt^3/16 + dt^4/16.
+        let want = 1.0 - dt + dt * dt / 2.0 - 3.0 * dt.powi(3) / 16.0 + dt.powi(4) / 16.0;
+        assert_close(&y1, &[want], 1e-12);
+        // It is genuinely different from classical RK4 at this order.
+        let classical = RK4.step(&[1.0], dt, neg)[0];
+        assert!((classical - y1[0]).abs() > 1e-6);
     }
 
     #[test]

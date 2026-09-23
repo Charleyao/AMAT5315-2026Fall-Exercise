@@ -1,9 +1,35 @@
-Part 1 line propagation accuracy (one lap)
-n = 64, c = 1.0, nu = 0.002, sigma = 0.25, t_final = 6.280000 (2*pi ~= 6.283185)
+Part 1 line accuracy
 
-method                            dt   max abs error
-RK4 + Fourier                   0.02    1.803703e-05
-RK4 + centred finite diff       0.02    3.108419e-01
-Euler + Fourier                0.005    2.098356e-01
+propagation (one lap):
+  n = 64, c = 1.0, nu = 0.002, sigma = 0.25, t_final = 6.280000 (2*pi ~= 6.283185)
+  method                            dt   max abs error
+  RK4 + Fourier                   0.02    1.803703e-05
+  RK4 + centred finite diff       0.02    3.108419e-01
+  Euler + Fourier                0.005    2.098356e-01
+
+temporal convergence (Fourier only):
+  n = 64, c = 1.0, nu = 0.05, sigma = 0.35, t_end = 1.0
+  method                  dt       max error
+  Euler                 0.02    3.720448e-02
+  Euler                 0.01    1.786718e-02
+  Euler                0.005    8.762183e-03
+  Euler               0.0025    4.339658e-03
+  Midpoint              0.02    7.052270e-04
+  Midpoint              0.01    1.753089e-04
+  Midpoint             0.005    4.366540e-05
+  Midpoint            0.0025    1.089380e-05
+  RK4                   0.02    2.920462e-07
+  RK4                   0.01    1.818038e-08
+  RK4                  0.005    1.133198e-09
+  RK4                 0.0025    7.071610e-11
+  Equal-weight RK       0.02    8.744568e-05
+  Equal-weight RK       0.01    2.176862e-05
+  Equal-weight RK      0.005    5.436640e-06
+  Equal-weight RK     0.0025    1.358824e-06
+
+  fitted slope, Euler              p = 1.0327
+  fitted slope, Midpoint           p = 2.0055
+  fitted slope, RK4                p = 4.0040
+  fitted slope, Equal-weight RK    p = 2.0025
 
 figure: evidence/line-accuracy.png

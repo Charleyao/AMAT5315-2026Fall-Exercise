@@ -165,6 +165,99 @@ impl Spectral2D {
         })
     }
 
+    // -------------------------------------------------------------------------
+    // Two-thirds dealiasing
+    // -------------------------------------------------------------------------
+
+    /// Two-thirds cutoff `floor(n/3)` in each signed wavenumber.
+    pub fn k_cut(&self) -> usize {
+        self.n() / 3
+    }
+
+    /// Whether FFT mode `(ix, iy)` survives the two-thirds rule:
+    /// `|kx| <= k_cut` **and** `|ky| <= k_cut`, using the signed wavenumbers.
+    /// The Nyquist mode is always outside (for `n >= 2`, `floor(n/3) < n/2`).
+    pub fn is_retained(&self, ix: usize, iy: usize) -> bool {
+        let cut = self.k_cut() as f64;
+        self.k[ix].abs() <= cut && self.k[iy].abs() <= cut
+    }
+
+    /// Zero every Fourier coefficient outside the two-thirds band, in place.
+    pub fn dealias_hat(&self, hat: &mut [Complex<f64>]) {
+        assert_eq!(hat.len(), self.len(), "spectrum has {} entries, expected {}", hat.len(), self.len());
+        let n = self.n();
+        for iy in 0..n {
+            for ix in 0..n {
+                if !self.is_retained(ix, iy) {
+                    hat[iy * n + ix] = Complex::new(0.0, 0.0);
+                }
+            }
+        }
+    }
+
+    /// Real-space two-thirds dealiasing: FFT, cutoff, inverse FFT.
+    pub fn dealias(&self, f: &[f64]) -> Vec<f64> {
+        let mut hat = self.forward(f);
+        self.dealias_hat(&mut hat);
+        self.inverse(&hat)
+    }
+
+    // -------------------------------------------------------------------------
+    // Incompressible vorticity-equation RHS
+    // -------------------------------------------------------------------------
+
+    /// `omega_t = -(u omega_x + v omega_y) + nu laplacian(omega)`.
+    ///
+    /// Every call re-derives `psi`, `u`, `v`, the gradients and the nonlinear
+    /// term from the `omega` it is handed, so an integrator can drive it straight
+    /// with `rk4.step(omega, dt, |stage| self.vorticity_rhs(stage, nu))` without
+    /// any state cached between stages.
+    pub fn vorticity_rhs(&self, omega: &[f64], nu: f64) -> Vec<f64> {
+        // 1. the carried vorticity itself must obey the cutoff.
+        let omega = self.dealias(omega);
+        // 2-3. psi from -laplacian(psi) = omega, then u = psi_y, v = -psi_x.
+        let (u, v) = self.velocity_from_vorticity(&omega);
+        // 4. vorticity gradients.
+        let omega_x = self.dx(&omega);
+        let omega_y = self.dy(&omega);
+        // 5. pointwise nonlinear product, computed in real space.
+        let adv: Vec<f64> = u
+            .iter()
+            .zip(omega_x.iter())
+            .zip(v.iter().zip(omega_y.iter()))
+            .map(|((u, ox), (v, oy))| u * ox + v * oy)
+            .collect();
+        // 6. dealias the nonlinear product.
+        let adv = self.dealias(&adv);
+        // 7-8. diffusion and the full RHS.
+        let diff = self.laplacian(&omega);
+        let rhs: Vec<f64> = adv
+            .iter()
+            .zip(diff.iter())
+            .map(|(a, d)| -a + nu * d)
+            .collect();
+        // 9. keep the RHS inside the band as well.
+        self.dealias(&rhs)
+    }
+
+    // -------------------------------------------------------------------------
+    // Diagnostics
+    // -------------------------------------------------------------------------
+
+    /// Energy `E = 0.5 * mean(u^2 + v^2)`.
+    pub fn energy(&self, u: &[f64], v: &[f64]) -> f64 {
+        assert_eq!(u.len(), self.len());
+        assert_eq!(v.len(), self.len());
+        0.5 * u.iter().zip(v.iter()).map(|(a, b)| a * a + b * b).sum::<f64>()
+            / self.len() as f64
+    }
+
+    /// Enstrophy `Z = 0.5 * mean(omega^2)`.
+    pub fn enstrophy(&self, omega: &[f64]) -> f64 {
+        assert_eq!(omega.len(), self.len());
+        0.5 * omega.iter().map(|w| w * w).sum::<f64>() / self.len() as f64
+    }
+
     /// Solve `-laplacian(psi) = omega` on the periodic square:
     /// `psi_hat(k) = omega_hat(k) / (kx^2 + ky^2)`, with `psi_hat(0,0) = 0`
     /// (the streamfunction's additive constant is arbitrary).
@@ -357,5 +450,211 @@ mod tests {
         assert!(err_u < 1e-10, "u error {err_u}");
         assert!(err_v < 1e-10, "v error {err_v}");
         assert!(max_div < 1e-10, "divergence {max_div}");
+    }
+
+    // ---- two-thirds dealiasing ----------------------------------------------
+
+    /// Signed wavenumber `k` as an FFT index in `0..n`.
+    fn mode_idx(k: i64, n: usize) -> usize {
+        if k >= 0 {
+            k as usize
+        } else {
+            (k + n as i64) as usize
+        }
+    }
+
+    /// Largest `|hat|` outside the two-thirds band.
+    fn max_outside(s: &Spectral2D, hat: &[Complex<f64>]) -> f64 {
+        let n = s.n();
+        let mut m = 0.0f64;
+        for iy in 0..n {
+            for ix in 0..n {
+                if !s.is_retained(ix, iy) {
+                    m = m.max(hat[iy * n + ix].norm());
+                }
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn two_thirds_cutoff_uses_signed_wavenumbers() {
+        let n = 12; // floor(n/3) = 4
+        let s = Spectral2D::new(n);
+        assert_eq!(s.k_cut(), 4);
+
+        let put = |hat: &mut Vec<Complex<f64>>, kx: i64, ky: i64, v: f64| {
+            hat[mode_idx(ky, n) * n + mode_idx(kx, n)] = Complex::new(v, 0.0);
+        };
+        let get = |hat: &Vec<Complex<f64>>, kx: i64, ky: i64| {
+            hat[mode_idx(ky, n) * n + mode_idx(kx, n)]
+        };
+
+        let mut hat = vec![Complex::new(0.0, 0.0); s.len()];
+        put(&mut hat, 4, 4, 1.0); // retained
+        put(&mut hat, 4, -4, 2.0); // retained
+        put(&mut hat, 5, 0, 3.0); // |kx| > 4 -> removed
+        put(&mut hat, 0, -5, 4.0); // |ky| > 4 -> removed
+        put(&mut hat, -6, 0, 5.0); // Nyquist -> removed
+        s.dealias_hat(&mut hat);
+
+        assert_eq!(get(&hat, 4, 4), Complex::new(1.0, 0.0));
+        assert_eq!(get(&hat, 4, -4), Complex::new(2.0, 0.0));
+        assert_eq!(get(&hat, 5, 0), Complex::new(0.0, 0.0));
+        assert_eq!(get(&hat, 0, -5), Complex::new(0.0, 0.0));
+        assert_eq!(get(&hat, -6, 0), Complex::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn dealiasing_keeps_low_k_and_removes_high_k() {
+        let n = 16; // floor(n/3) = 5
+        let s = Spectral2D::new(n);
+        let g = s.grid();
+        assert_eq!(s.k_cut(), 5);
+        let mut f = vec![0.0; s.len()];
+        let mut low = vec![0.0; s.len()];
+        for iy in 0..n {
+            for ix in 0..n {
+                let (x, y) = (g.point(ix), g.point(iy));
+                let i = g.index(ix, iy);
+                low[i] = (2.0 * x).sin() * (3.0 * y).cos();
+                f[i] = low[i] + 0.5 * (6.0 * x).sin(); // kx = 6 > 5
+            }
+        }
+        let d = s.dealias(&f);
+        let err = max_abs_err(&d, &low);
+        println!("dealiasing high-k removal error = {err:.3e}");
+        assert!(err < 1e-12, "dealiased field differs from the low-k part: {err}");
+    }
+
+    // ---- vorticity RHS --------------------------------------------------------
+
+    #[test]
+    fn taylor_green_nonlinear_term_is_zero_and_rhs_is_diffusion() {
+        let n = 64;
+        let nu = 0.1;
+        let s = Spectral2D::new(n);
+        let g = s.grid();
+        let mut omega = vec![0.0; s.len()];
+        for iy in 0..n {
+            for ix in 0..n {
+                let (x, y) = (g.point(ix), g.point(iy));
+                omega[g.index(ix, iy)] = -2.0 * x.cos() * y.cos();
+            }
+        }
+        let (u, v) = s.velocity_from_vorticity(&omega);
+        let omega_x = s.dx(&omega);
+        let omega_y = s.dy(&omega);
+        let adv: Vec<f64> = u
+            .iter()
+            .zip(omega_x.iter())
+            .zip(v.iter().zip(omega_y.iter()))
+            .map(|((u, ox), (v, oy))| u * ox + v * oy)
+            .collect();
+        let max_adv = adv.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+
+        let rhs = s.vorticity_rhs(&omega, nu);
+        let target: Vec<f64> = omega.iter().map(|w| -2.0 * nu * w).collect();
+        let max_rhs_err = max_abs_err(&rhs, &target);
+        println!(
+            "Taylor-Green: max |u omega_x + v omega_y| = {max_adv:.3e}, \
+             max |rhs + 2 nu omega| = {max_rhs_err:.3e}"
+        );
+        assert!(max_adv < 1e-10, "nonlinear term {max_adv}");
+        assert!(max_rhs_err < 1e-10, "rhs error {max_rhs_err}");
+    }
+
+    #[test]
+    fn nonlinear_path_on_a_smooth_dealiased_field() {
+        // A non-Taylor-Green field with modes near the cutoff, so the products
+        // really do reach outside the band before dealiasing.
+        let n = 32; // floor(n/3) = 10
+        let s = Spectral2D::new(n);
+        let g = s.grid();
+        assert_eq!(s.k_cut(), 10);
+        let mut omega = vec![0.0; s.len()];
+        for iy in 0..n {
+            for ix in 0..n {
+                let (x, y) = (g.point(ix), g.point(iy));
+                omega[g.index(ix, iy)] = (6.0 * x).sin() * (4.0 * y).cos()
+                    + 0.8 * (3.0 * x).sin() * (5.0 * y).cos()
+                    + 0.6 * (2.0 * x).cos() * (6.0 * y).sin();
+            }
+        }
+        let omega = s.dealias(&omega); // carried field obeys the cutoff
+
+        let (u, v) = s.velocity_from_vorticity(&omega);
+        let omega_x = s.dx(&omega);
+        let omega_y = s.dy(&omega);
+        let adv: Vec<f64> = u
+            .iter()
+            .zip(omega_x.iter())
+            .zip(v.iter().zip(omega_y.iter()))
+            .map(|((u, ox), (v, oy))| u * ox + v * oy)
+            .collect();
+        let max_adv = adv.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+        let raw_outside = max_outside(&s, &s.forward(&adv));
+        let dealt_outside = max_outside(&s, &s.forward(&s.dealias(&adv)));
+
+        let rhs = s.vorticity_rhs(&omega, 0.05);
+        let rhs_outside = max_outside(&s, &s.forward(&rhs));
+
+        println!(
+            "nonlinear: max |adv| = {max_adv:.3e}, raw out-of-band = {raw_outside:.3e}, \
+             dealt out-of-band = {dealt_outside:.3e}, rhs out-of-band = {rhs_outside:.3e}"
+        );
+        assert!(max_adv > 1e-6, "nonlinear term vanished");
+        assert!(raw_outside > 1e-6, "raw product had no out-of-band content");
+        assert!(dealt_outside < 1e-9, "dealiased product still has out-of-band content");
+        assert!(rhs_outside < 1e-9, "rhs still has out-of-band content");
+    }
+
+    #[test]
+    fn taylor_green_energy_and_enstrophy() {
+        let n = 64;
+        let s = Spectral2D::new(n);
+        let g = s.grid();
+        let mut omega = vec![0.0; s.len()];
+        let mut u = vec![0.0; s.len()];
+        let mut v = vec![0.0; s.len()];
+        for iy in 0..n {
+            for ix in 0..n {
+                let (x, y) = (g.point(ix), g.point(iy));
+                let i = g.index(ix, iy);
+                omega[i] = -2.0 * x.cos() * y.cos();
+                u[i] = x.cos() * y.sin();
+                v[i] = -x.sin() * y.cos();
+            }
+        }
+        let e = s.energy(&u, &v);
+        let z = s.enstrophy(&omega);
+        println!("Taylor-Green E = {e:.16}, Z = {z:.16}");
+        assert!((e - 0.25).abs() < 1e-12, "E = {e}");
+        assert!((z - 0.5).abs() < 1e-12, "Z = {z}");
+    }
+
+    #[test]
+    fn vorticity_rhs_is_stateless_in_omega() {
+        // Each call re-derives psi, u, v from the omega it receives, so calling
+        // the RHS on `a` after touching `b` must reproduce the first answer.
+        let n = 32;
+        let s = Spectral2D::new(n);
+        let g = s.grid();
+        let field = |kx: f64, ky: f64| {
+            let mut f = vec![0.0; s.len()];
+            for iy in 0..n {
+                for ix in 0..n {
+                    let (x, y) = (g.point(ix), g.point(iy));
+                    f[g.index(ix, iy)] = (kx * x).sin() * (ky * y).cos();
+                }
+            }
+            f
+        };
+        let a = field(2.0, 3.0);
+        let b = field(4.0, 1.0);
+        let ra1 = s.vorticity_rhs(&a, 0.05);
+        let _rb = s.vorticity_rhs(&b, 0.05);
+        let ra2 = s.vorticity_rhs(&a, 0.05);
+        assert_eq!(ra1, ra2);
     }
 }

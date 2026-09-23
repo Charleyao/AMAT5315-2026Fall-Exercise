@@ -1,0 +1,16 @@
+Part 4 random-flow convergence
+n = 128, seed = 2026, k in [2,6], nu = 0.004, t_end = 2, RK4
+reference: dt = 0.0025 (not a fit point)
+
+       dt    measured error   predicted error
+     0.02      3.695270e-05      3.706848e-05
+   0.0125      5.537898e-06      5.656201e-06
+     0.01      2.254199e-06      2.316780e-06
+
+fitted slope q = 4.0355
+error(0.02)/error(0.01) = 16.3928 (fourth order predicts ~16)
+Richardson estimate at dt = 0.01 = 2.316780e-06
+target relative error < 5e-06
+chosen dt = 0.01
+  predicted error = 2.316780e-06
+  measured  error = 2.254199e-06

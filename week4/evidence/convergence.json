@@ -1,0 +1,41 @@
+{
+  "case": "random",
+  "n": 128,
+  "seed": 2026,
+  "k_band": [
+    2,
+    6
+  ],
+  "nu": 0.004,
+  "t_end": 2.0,
+  "method": "rk4",
+  "reference_dt": 0.0025,
+  "quantity": "final vorticity at t = 2, relative L2 error",
+  "runs": [
+    {
+      "dt": 0.02,
+      "relative_omega_error": 3.695269911040503e-05,
+      "predicted_error": 3.7068480985287946e-05
+    },
+    {
+      "dt": 0.0125,
+      "relative_omega_error": 5.5378984432892155e-06,
+      "predicted_error": 5.656201322218009e-06
+    },
+    {
+      "dt": 0.01,
+      "relative_omega_error": 2.2541989631731527e-06,
+      "predicted_error": 2.3167800615804966e-06
+    }
+  ],
+  "fitted_slope": 4.035506408625048,
+  "error_ratio_0.02_over_0.01": 16.392829432583927,
+  "richardson": {
+    "dt": 0.01,
+    "assumed_order": 4,
+    "denominator": 15.0,
+    "estimate": 2.3167800615804966e-06
+  },
+  "target_relative_error": 5e-06,
+  "chosen_dt": 0.01
+}

@@ -14,3 +14,7 @@ path = "scripts/line_stability_data.rs"
 [[bin]]
 name = "line-accuracy-data"
 path = "scripts/line_accuracy_data.rs"
+
+[[bin]]
+name = "sensitivity-prep"
+path = "scripts/sensitivity_prep.rs"

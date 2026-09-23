@@ -1,0 +1,25 @@
+Part 3 sensitivity: original vs perturbed initial vorticity ripple
+dt = 0.01, RK4, t_end = 20 (stable; distinct from the blow-up scan)
+
+Taylor-Green n = 64: D(0) = 3.4969e-05, D(20) = 4.5142e-06, factor = 1.291e-01
+random      n = 128: D(0) = 1.9556e-05, D(20) = 1.2264e-03, factor = 6.271e+01
+random e-folding fit: tau = 1.7880 over 8 points in t in [0, 3.5]
+
+random D(t) at selected times:
+  t =    0: D = 1.9556e-05
+  t =    1: D = 2.9505e-05
+  t =    2: D = 5.3089e-05
+  t =    3: D = 9.8462e-05
+  t =    5: D = 2.1751e-04
+  t =   10: D = 4.4936e-04
+  t =   15: D = 7.0099e-04
+  t =   20: D = 1.2264e-03
+
+note: the Taylor-Green pair decays to the 6-decimal fields.jsonl storage floor
+      (D ~ 1e-6); its late-time wiggles are that quantization, kept as measured.
+summary:
+  numerical blow-up  = one solver run grows its own energy to non-finite.
+  sensitivity        = both dt = 0.01 runs stay finite and their energies
+                       decay; only the solution distance between them grows
+                       (random pair). Not a solver instability.
+figure: evidence/sensitivity.png

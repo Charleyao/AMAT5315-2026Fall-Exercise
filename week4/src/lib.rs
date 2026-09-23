@@ -1,3 +1,5 @@
+pub mod grid;
+
 pub trait Integrator {
     fn step<F>(&self, y: &[f64], dt: f64, rhs: F) -> Vec<f64>
     where

@@ -1,0 +1,9 @@
+Part 1 line propagation accuracy (one lap)
+n = 64, c = 1.0, nu = 0.002, sigma = 0.25, t_final = 6.280000 (2*pi ~= 6.283185)
+
+method                            dt   max abs error
+RK4 + Fourier                   0.02    1.803703e-05
+RK4 + centred finite diff       0.02    3.108419e-01
+Euler + Fourier                0.005    2.098356e-01
+
+figure: evidence/line-accuracy.png

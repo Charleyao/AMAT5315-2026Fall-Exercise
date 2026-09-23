@@ -1,6 +1,7 @@
 pub mod advdiff;
 pub mod grid;
 pub mod grid2d;
+pub mod spectral2d;
 
 pub trait Integrator {
     fn step<F>(&self, y: &[f64], dt: f64, rhs: F) -> Vec<f64>

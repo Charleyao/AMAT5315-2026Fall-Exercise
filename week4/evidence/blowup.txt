@@ -1,0 +1,19 @@
+Part 3 stability limits
+
+RK4 real-axis crossing   = 2.785294
+RK4 imaginary crossing   = 2.828427
+Taylor-Green: k_cut = 21, |k|^2_max = 882, predicted diffusive dt limit = 0.031579
+random: U_max = 2.2953, k_cut = 42, |k|_max = 59.397, predicted advective bound = 0.020746
+measured random boundary ratio (0.030..0.032 / bound) = 1.45 .. 1.54
+
+Taylor-Green runs:
+  dt = 0.032: last finite t = 7.68, reached the end
+  dt = 0.033: last finite t = 7.425, stopped at t = 7.92
+  dt = 0.040: last finite t = 1.68, stopped at t = 1.8
+
+random runs:
+  rk4 0.030: last finite t = 9.69, reached the end
+  rk4 0.032: last finite t = 2.56, stopped at t = 3.072
+  euler 0.010: last finite t = 0.5, stopped at t = 1
+
+figure: evidence/blowup.png

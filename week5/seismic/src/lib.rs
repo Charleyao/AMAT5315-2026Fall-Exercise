@@ -12,6 +12,7 @@
 //! with a five-point Laplacian, zero outer Dirichlet boundary, a quadratic
 //! sponge, a Ricker source and unit-peak Gaussian footprints.
 
+pub mod adjoint;
 pub mod born;
 
 use serde::Deserialize;
@@ -314,6 +315,75 @@ pub fn write_npy_f32(path: &Path, shape: &[usize], data: &[f32]) -> io::Result<(
     writer.flush()
 }
 
+/// Parse the shape tuple out of a `.npy` header dictionary.
+fn npy_shape(header: &str) -> Result<Vec<usize>, String> {
+    let key = header
+        .find("'shape'")
+        .or_else(|| header.find("\"shape\""))
+        .ok_or("missing 'shape' field")?;
+    let open = header[key..].find('(').ok_or("missing shape tuple")? + key;
+    let close = header[open..].find(')').ok_or("unterminated shape tuple")? + open;
+    header[open + 1..close]
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            part.parse::<usize>()
+                .map_err(|error| format!("bad shape element {part:?}: {error}"))
+        })
+        .collect()
+}
+
+/// Read a little-endian, C-order `.npy` array of `float64`.
+///
+/// Supports NumPy format 1.0 and 2.0. Returns the parsed shape and the flat
+/// data; the caller checks the shape against the experiment.
+pub fn read_npy_f64(path: &Path) -> Result<(Vec<usize>, Vec<f64>), String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if bytes.len() < 10 || &bytes[0..6] != b"\x93NUMPY" {
+        return Err(format!("{}: not a NumPy .npy file", path.display()));
+    }
+    let major = bytes[6];
+    let (header_start, header_len) = if major == 1 {
+        (10usize, u16::from_le_bytes([bytes[8], bytes[9]]) as usize)
+    } else {
+        (
+            12usize,
+            u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize,
+        )
+    };
+    let header_end = header_start + header_len;
+    if header_end > bytes.len() {
+        return Err(format!("{}: truncated .npy header", path.display()));
+    }
+    let header = std::str::from_utf8(&bytes[header_start..header_end])
+        .map_err(|error| format!("{}: header is not UTF-8: {error}", path.display()))?;
+    if !header.contains("<f8") {
+        return Err(format!("{}: expected '<f8' data", path.display()));
+    }
+    if !header.contains("'fortran_order': False") && !header.contains("\"fortran_order\": False") {
+        return Err(format!("{}: expected C-order data", path.display()));
+    }
+    let shape = npy_shape(header)?;
+    let payload = &bytes[header_end..];
+    if payload.len() % 8 != 0 {
+        return Err(format!("{}: payload is not a whole number of f64", path.display()));
+    }
+    let values: Vec<f64> = payload
+        .chunks_exact(8)
+        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+        .collect();
+    let expected: usize = shape.iter().product();
+    if expected != values.len() {
+        return Err(format!(
+            "{}: shape {shape:?} does not match {} values",
+            path.display(),
+            values.len()
+        ));
+    }
+    Ok((shape, values))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,6 +607,49 @@ mod tests {
         assert!(
             relative < 1e-6,
             "Born JVP vs central finite differences relative error {relative}"
+        );
+    }
+
+    /// Relative error of the transpose identity `<Jm, Jm> = <m, J^T Jm>`.
+    fn transpose_relative_error(experiment: &Experiment) -> f64 {
+        let c = experiment.background_flat();
+        let m = experiment.perturbation_flat();
+        let data = crate::born::born(experiment, &c, &m);
+        let result = crate::adjoint::adjoint(experiment, &c, &data, None);
+        let left: f64 = data.iter().map(|v| v * v).sum();
+        let right: f64 = m
+            .iter()
+            .zip(result.image.iter())
+            .map(|(m, image)| m * image)
+            .sum();
+        (left - right).abs() / left.abs().max(right.abs()).max(1e-30)
+    }
+
+    #[test]
+    fn adjoint_satisfies_the_transpose_identity() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        experiment.source_peak_time = 1.0;
+        experiment.steps = 40;
+        let relative = transpose_relative_error(&experiment);
+        assert!(
+            relative < 1e-9,
+            "transpose identity relative error {relative}"
+        );
+    }
+
+    #[test]
+    fn adjoint_accumulates_duplicate_receivers() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        experiment.source_peak_time = 1.0;
+        experiment.steps = 20;
+        // Two receivers share the cell [1, 1]; their weights must accumulate.
+        experiment.receivers = vec![[1, 1], [1, 1], [4, 1], [2, 4]];
+        let relative = transpose_relative_error(&experiment);
+        assert!(
+            relative < 1e-9,
+            "duplicate-receiver transpose identity relative error {relative}"
         );
     }
 }

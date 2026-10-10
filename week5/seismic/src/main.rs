@@ -1,17 +1,21 @@
-//! `seismic` command-line program: forward-mode acoustic simulation.
+//! `seismic` command-line program: forward, Born and adjoint acoustic modes.
 //!
 //! Usage:
 //!   seismic --experiment <JSON_PATH> --mode forward [--every N] --out <DIR>
+//!   seismic --experiment <JSON_PATH> --mode born --out <DIR>
+//!   seismic --experiment <JSON_PATH> --mode adjoint --data <BORN_NPY> [--every N] --out <DIR>
 
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
+use seismic::adjoint::adjoint;
 use seismic::born::born;
-use seismic::{forward, write_npy_f32, write_npy_f64, Experiment};
+use seismic::{forward, read_npy_f64, write_npy_f32, write_npy_f64, Experiment};
 
 struct Options {
     experiment: PathBuf,
     mode: String,
+    data: Option<PathBuf>,
     every: Option<usize>,
     out: PathBuf,
 }
@@ -26,6 +30,7 @@ fn parse_options() -> Result<Options, String> {
     let args: Vec<String> = std::env::args().collect();
     let mut experiment: Option<PathBuf> = None;
     let mut mode: Option<String> = None;
+    let mut data: Option<PathBuf> = None;
     let mut every: Option<usize> = None;
     let mut out: Option<PathBuf> = None;
 
@@ -37,6 +42,7 @@ fn parse_options() -> Result<Options, String> {
                 experiment = Some(PathBuf::from(next_value(&args, index, flag)?))
             }
             "--mode" => mode = Some(next_value(&args, index, flag)?),
+            "--data" => data = Some(PathBuf::from(next_value(&args, index, flag)?)),
             "--out" => out = Some(PathBuf::from(next_value(&args, index, flag)?)),
             "--every" => {
                 let text = next_value(&args, index, flag)?;
@@ -56,6 +62,7 @@ fn parse_options() -> Result<Options, String> {
     Ok(Options {
         experiment: experiment.ok_or("--experiment is required")?,
         mode: mode.ok_or("--mode is required")?,
+        data,
         every,
         out: out.ok_or("--out is required")?,
     })
@@ -270,12 +277,118 @@ fn run_born(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+fn run_adjoint(options: &Options) -> Result<(), String> {
+    let experiment = Experiment::load(&options.experiment)?;
+    std::fs::create_dir_all(&options.out)
+        .map_err(|error| format!("{}: {error}", options.out.display()))?;
+
+    let data_path = options
+        .data
+        .as_ref()
+        .ok_or("--data is required for adjoint: pass the born_data.npy receiver weights")?;
+    let (shape, weights) = read_npy_f64(data_path)?;
+    let expected = [
+        experiment.shots.len(),
+        experiment.steps,
+        experiment.receivers.len(),
+    ];
+    if shape[..] != expected[..] {
+        return Err(format!(
+            "{}: expected float64 shape {expected:?}, got {shape:?}",
+            data_path.display()
+        ));
+    }
+
+    let background = experiment.background_flat();
+    let result = adjoint(&experiment, &background, &weights, options.every);
+
+    let image_path = options.out.join("image.npy");
+    write_npy_f64(&image_path, &[experiment.nz, experiment.nx], &result.image)
+        .map_err(|error| format!("{}: {error}", image_path.display()))?;
+
+    let mut run = Map::new();
+    run.insert("experiment".into(), compact_experiment(&experiment));
+    run.insert(
+        "experiment_file".into(),
+        json!(options.experiment.to_string_lossy()),
+    );
+    if let Some(every) = options.every {
+        let wavefield_path = options.out.join("wavefield.npy");
+        write_npy_f32(
+            &wavefield_path,
+            &[result.frame_steps.len(), experiment.nz, experiment.nx],
+            &result.frames,
+        )
+        .map_err(|error| format!("{}: {error}", wavefield_path.display()))?;
+        let times: Vec<f64> = result
+            .frame_steps
+            .iter()
+            .map(|step| *step as f64 * experiment.dt)
+            .collect();
+        run.insert(
+            "recording".into(),
+            json!({"every": every, "steps": result.frame_steps, "times": times}),
+        );
+    }
+    let run_path = options.out.join("run.json");
+    let run_text = serde_json::to_string_pretty(&Value::Object(run))
+        .map_err(|error| error.to_string())?;
+    std::fs::write(&run_path, format!("{run_text}\n"))
+        .map_err(|error| format!("{}: {error}", run_path.display()))?;
+
+    let per_shot: Vec<Value> = result
+        .stats
+        .per_shot
+        .iter()
+        .map(|shot| {
+            json!({
+                "reverse_calls": shot.reverse_calls,
+                "scheduler_forward_calls": shot.scheduler_forward_calls,
+                "peak_saved_states": shot.peak_saved_states,
+            })
+        })
+        .collect();
+    let statistics = json!({
+        "storage": "full",
+        "checkpoints": Value::Null,
+        "reverse_calls": result.stats.reverse_calls,
+        "scheduler_forward_calls": result.stats.scheduler_forward_calls,
+        "peak_saved_states": result.stats.peak_saved_states,
+        "peak_saved_bytes": result.stats.peak_saved_bytes,
+        "per_shot": per_shot,
+    });
+    let result_json = json!({
+        "mode": "adjoint",
+        "nx": experiment.nx,
+        "nz": experiment.nz,
+        "steps": experiment.steps,
+        "dt": experiment.dt,
+        "dx": experiment.dx,
+        "shots": experiment.shots,
+        "receivers": experiment.receivers,
+        "statistics": statistics,
+    });
+    let result_path = options.out.join("result.json");
+    let result_text = serde_json::to_string(&result_json).map_err(|error| error.to_string())?;
+    std::fs::write(&result_path, format!("{result_text}\n"))
+        .map_err(|error| format!("{}: {error}", result_path.display()))?;
+
+    // Official contract: a header, then one line per shot.
+    println!("shot\tmode\tdata_l2_norm");
+    for (shot_index, norm) in result.shot_norms.iter().enumerate() {
+        println!("{shot_index}\tadjoint\t{norm:.9}");
+    }
+
+    Ok(())
+}
+
 fn main() {
     let result = parse_options().and_then(|options| match options.mode.as_str() {
         "forward" => run_forward(&options),
         "born" => run_born(&options),
+        "adjoint" => run_adjoint(&options),
         other => Err(format!(
-            "unsupported mode '{other}': only 'forward' and 'born' are implemented"
+            "unsupported mode '{other}': only 'forward', 'born' and 'adjoint' are implemented"
         )),
     });
     if let Err(error) = result {

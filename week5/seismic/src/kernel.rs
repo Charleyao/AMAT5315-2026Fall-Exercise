@@ -1,4 +1,5 @@
-//! Enzyme kernel: the numerical timestep and its forward-mode JVP.
+//! Enzyme kernel: the numerical timestep with its forward-mode JVP and
+//! reverse-mode VJP.
 //!
 //! This file is never `mod`-included by the crate. `build.rs` compiles it on
 //! its own with `-Zautodiff=Enable` and links the resulting static archive, so
@@ -6,7 +7,7 @@
 
 #![no_std]
 #![feature(autodiff)]
-use core::autodiff::autodiff_forward;
+use core::autodiff::{autodiff_forward, autodiff_reverse};
 
 /// One damped acoustic timestep on a C-order `[z, x]` grid:
 ///
@@ -33,6 +34,12 @@ use core::autodiff::autodiff_forward;
     Const, Const, Const, Const,
     Dual, Const, Const, Const,
     Dual, Dual, Dual
+)]
+#[autodiff_reverse(
+    timestep_vjp,
+    Const, Const, Const, Const,
+    Duplicated, Const, Const, Const,
+    Duplicated, Duplicated, Duplicated
 )]
 fn timestep(
     nx: usize,
@@ -73,6 +80,34 @@ fn timestep(
     }
 }
 
+/// C ABI wrapper for the primal timestep only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enzyme_timestep_primal(
+    nx: usize,
+    nz: usize,
+    inv_dx2: f64,
+    dt: f64,
+    c: *const f64,
+    sigma: *const f64,
+    den: *const f64,
+    src: *const f64,
+    prev: *const f64,
+    cur: *const f64,
+    next: *mut f64,
+) {
+    let n = nx * nz;
+    unsafe {
+        let c = core::slice::from_raw_parts(c, n);
+        let sigma = core::slice::from_raw_parts(sigma, n);
+        let den = core::slice::from_raw_parts(den, n);
+        let src = core::slice::from_raw_parts(src, n);
+        let prev = core::slice::from_raw_parts(prev, n);
+        let cur = core::slice::from_raw_parts(cur, n);
+        let next = core::slice::from_raw_parts_mut(next, n);
+        timestep(nx, nz, inv_dx2, dt, c, sigma, den, src, prev, cur, next);
+    }
+}
+
 /// C ABI wrapper for the primal timestep and its forward-mode JVP.
 ///
 /// Every buffer is caller-owned and has `nx * nz` elements. The safe Rust
@@ -109,6 +144,48 @@ pub unsafe extern "C" fn enzyme_timestep(
         let next = core::slice::from_raw_parts_mut(next, n);
         let dnext = core::slice::from_raw_parts_mut(dnext, n);
         timestep_jvp(
+            nx, nz, inv_dx2, dt, c, dc, sigma, den, src, prev, dprev, cur, dcur, next, dnext,
+        );
+    }
+}
+
+/// C ABI wrapper for the reverse-mode VJP of the timestep.
+///
+/// The caller seeds `dnext` with the output adjoint; `dc`, `dprev` and `dcur`
+/// are accumulators and must be zeroed first. Every buffer has `nx * nz`
+/// elements.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enzyme_timestep_vjp(
+    nx: usize,
+    nz: usize,
+    inv_dx2: f64,
+    dt: f64,
+    c: *const f64,
+    dc: *mut f64,
+    sigma: *const f64,
+    den: *const f64,
+    src: *const f64,
+    prev: *const f64,
+    dprev: *mut f64,
+    cur: *const f64,
+    dcur: *mut f64,
+    next: *mut f64,
+    dnext: *mut f64,
+) {
+    let n = nx * nz;
+    unsafe {
+        let c = core::slice::from_raw_parts(c, n);
+        let dc = core::slice::from_raw_parts_mut(dc, n);
+        let sigma = core::slice::from_raw_parts(sigma, n);
+        let den = core::slice::from_raw_parts(den, n);
+        let src = core::slice::from_raw_parts(src, n);
+        let prev = core::slice::from_raw_parts(prev, n);
+        let dprev = core::slice::from_raw_parts_mut(dprev, n);
+        let cur = core::slice::from_raw_parts(cur, n);
+        let dcur = core::slice::from_raw_parts_mut(dcur, n);
+        let next = core::slice::from_raw_parts_mut(next, n);
+        let dnext = core::slice::from_raw_parts_mut(dnext, n);
+        timestep_vjp(
             nx, nz, inv_dx2, dt, c, dc, sigma, den, src, prev, dprev, cur, dcur, next, dnext,
         );
     }

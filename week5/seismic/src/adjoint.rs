@@ -49,7 +49,7 @@ unsafe extern "C" {
 
 /// Safe wrapper for the primal timestep. All slices have `nx * nz` elements.
 #[allow(clippy::too_many_arguments)]
-fn primal_timestep(
+pub(crate) fn primal_timestep(
     nx: usize,
     nz: usize,
     dx: f64,
@@ -93,7 +93,7 @@ fn primal_timestep(
 /// accumulators and must be zeroed before the call. The primal `next` is only
 /// passed for completeness; the VJP does not depend on its value.
 #[allow(clippy::too_many_arguments)]
-fn vjp_timestep(
+pub(crate) fn vjp_timestep(
     nx: usize,
     nz: usize,
     dx: f64,
@@ -143,6 +143,36 @@ fn vjp_timestep(
     }
 }
 
+/// Which adjoint storage strategy produced a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Storage {
+    Full,
+    Treeverse,
+}
+
+impl Storage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Storage::Full => "full",
+            Storage::Treeverse => "treeverse",
+        }
+    }
+}
+
+/// One audited entry of a Treeverse schedule.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeverseAction {
+    /// `store`, `restore`, `call`, `grad` or `fetch`.
+    pub action: &'static str,
+    /// Timestep the action applies to.
+    pub step: usize,
+    pub tau: usize,
+    pub delta: usize,
+    pub depth: usize,
+    /// Saved states after the action, including the never-freed `s_0`.
+    pub saved_states: usize,
+}
+
 /// Full-history counters for one shot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerShotStats {
@@ -151,9 +181,11 @@ pub struct PerShotStats {
     pub peak_saved_states: usize,
 }
 
-/// Aggregated full-history statistics, as required by `seismic.design.toml`.
+/// Aggregated statistics, as required by `seismic.design.toml`.
 #[derive(Debug, Clone)]
 pub struct AdjointStats {
+    pub storage: Storage,
+    pub checkpoints: Option<usize>,
     pub reverse_calls: usize,
     pub scheduler_forward_calls: usize,
     pub peak_saved_states: usize,
@@ -171,6 +203,8 @@ pub struct AdjointResult {
     pub frames: Vec<f32>,
     /// Step index of every frame, in reverse (descending) order.
     pub frame_steps: Vec<usize>,
+    /// Per-shot Treeverse schedules; empty for full-history storage.
+    pub actions: Vec<Vec<TreeverseAction>>,
     pub stats: AdjointStats,
 }
 
@@ -347,6 +381,8 @@ pub fn adjoint(
         .unwrap_or(0);
     let state_bytes = 2 * nx * nz * 8;
     let stats = AdjointStats {
+        storage: Storage::Full,
+        checkpoints: None,
         reverse_calls,
         scheduler_forward_calls,
         peak_saved_states,
@@ -359,6 +395,7 @@ pub fn adjoint(
         shot_norms,
         frames,
         frame_steps,
+        actions: Vec::new(),
         stats,
     }
 }

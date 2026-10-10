@@ -14,6 +14,7 @@
 
 pub mod adjoint;
 pub mod born;
+pub mod treeverse;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -651,5 +652,81 @@ mod tests {
             relative < 1e-9,
             "duplicate-receiver transpose identity relative error {relative}"
         );
+    }
+
+    fn treeverse_data(experiment: &Experiment) -> (Vec<f64>, Vec<f64>) {
+        let c = experiment.background_flat();
+        let m = experiment.perturbation_flat();
+        let data = crate::born::born(experiment, &c, &m);
+        (c, data)
+    }
+
+    #[test]
+    fn treeverse_small_example_schedule_matches_the_reference() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        experiment.source_peak_time = 1.0;
+        experiment.steps = 6;
+        let (c, data) = treeverse_data(&experiment);
+
+        let result = crate::treeverse::adjoint_treeverse(&experiment, &c, &data, 2);
+        let actions = &result.actions[0];
+        let calls = actions.iter().filter(|a| a.action == "call").count();
+        let grads: Vec<usize> = actions
+            .iter()
+            .filter(|a| a.action == "grad")
+            .map(|a| a.step)
+            .collect();
+        let first_store = actions
+            .iter()
+            .find(|a| a.action == "store")
+            .expect("at least one store")
+            .step;
+
+        // Learning Sheet reference for N = 6, delta = 2.
+        assert_eq!(calls, 8, "forward calls");
+        assert_eq!(grads, vec![5, 4, 3, 2, 1, 0], "reverse order");
+        assert_eq!(first_store, 3, "initial interior checkpoint");
+        assert_eq!(result.stats.peak_saved_states, 3, "peak saved states");
+        assert_eq!(result.stats.reverse_calls, 6, "reverse calls");
+        assert_eq!(actions.last().unwrap().saved_states, 1, "only s_0 left");
+        crate::treeverse::validate_schedule(actions, 6, 2).expect("valid schedule");
+    }
+
+    #[test]
+    fn treeverse_image_matches_full_history() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        experiment.source_peak_time = 1.0;
+        experiment.steps = 24;
+        let (c, data) = treeverse_data(&experiment);
+
+        let full = crate::adjoint::adjoint(&experiment, &c, &data, None).image;
+        let tree = crate::treeverse::adjoint_treeverse(&experiment, &c, &data, 2).image;
+        let error: f64 = full
+            .iter()
+            .zip(tree.iter())
+            .map(|(a, b)| (a - b) * (a - b))
+            .sum::<f64>()
+            .sqrt()
+            / full.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!(error < 1e-9, "treeverse vs full-history image error {error}");
+    }
+
+    #[test]
+    fn treeverse_validation_rejects_a_missing_reverse_step() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        experiment.source_peak_time = 1.0;
+        experiment.steps = 6;
+        let (c, data) = treeverse_data(&experiment);
+        let result = crate::treeverse::adjoint_treeverse(&experiment, &c, &data, 2);
+        let mut actions = result.actions[0].clone();
+        let position = actions
+            .iter()
+            .position(|a| a.action == "grad" && a.step == 3)
+            .expect("grad at step 3");
+        actions.remove(position);
+        assert!(crate::treeverse::validate_schedule(&actions, 6, 2).is_err());
     }
 }

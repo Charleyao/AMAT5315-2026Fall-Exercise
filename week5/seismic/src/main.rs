@@ -3,13 +3,15 @@
 //! Usage:
 //!   seismic --experiment <JSON_PATH> --mode forward [--every N] --out <DIR>
 //!   seismic --experiment <JSON_PATH> --mode born --out <DIR>
-//!   seismic --experiment <JSON_PATH> --mode adjoint --data <BORN_NPY> [--every N] --out <DIR>
+//!   seismic --experiment <JSON_PATH> --mode adjoint --data <BORN_NPY> [--every N]
+//!           [--storage full|treeverse] [--checkpoints B] --out <DIR>
 
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
-use seismic::adjoint::adjoint;
+use seismic::adjoint::{adjoint, Storage, TreeverseAction};
 use seismic::born::born;
+use seismic::treeverse::adjoint_treeverse;
 use seismic::{forward, read_npy_f64, write_npy_f32, write_npy_f64, Experiment};
 
 struct Options {
@@ -17,6 +19,8 @@ struct Options {
     mode: String,
     data: Option<PathBuf>,
     every: Option<usize>,
+    storage: Storage,
+    checkpoints: Option<usize>,
     out: PathBuf,
 }
 
@@ -32,6 +36,8 @@ fn parse_options() -> Result<Options, String> {
     let mut mode: Option<String> = None;
     let mut data: Option<PathBuf> = None;
     let mut every: Option<usize> = None;
+    let mut storage: Option<Storage> = None;
+    let mut checkpoints: Option<usize> = None;
     let mut out: Option<PathBuf> = None;
 
     let mut index = 1;
@@ -54,6 +60,28 @@ fn parse_options() -> Result<Options, String> {
                 }
                 every = Some(parsed);
             }
+            "--storage" => {
+                let text = next_value(&args, index, flag)?;
+                storage = Some(match text.as_str() {
+                    "full" => Storage::Full,
+                    "treeverse" => Storage::Treeverse,
+                    other => {
+                        return Err(format!(
+                            "--storage expects 'full' or 'treeverse', got {other}"
+                        ));
+                    }
+                });
+            }
+            "--checkpoints" => {
+                let text = next_value(&args, index, flag)?;
+                let parsed: usize = text.parse().map_err(|_| {
+                    format!("--checkpoints expects a positive integer, got {text}")
+                })?;
+                if parsed == 0 {
+                    return Err("--checkpoints must be at least 1".into());
+                }
+                checkpoints = Some(parsed);
+            }
             other => return Err(format!("unknown argument {other}")),
         }
         index += 2;
@@ -64,6 +92,8 @@ fn parse_options() -> Result<Options, String> {
         mode: mode.ok_or("--mode is required")?,
         data,
         every,
+        storage: storage.unwrap_or(Storage::Full),
+        checkpoints,
         out: out.ok_or("--out is required")?,
     })
 }
@@ -277,6 +307,18 @@ fn run_born(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+/// Serialise one Treeverse action for `actions-<shot>.json`.
+fn action_json(action: &TreeverseAction) -> Value {
+    json!({
+        "action": action.action,
+        "step": action.step,
+        "tau": action.tau,
+        "delta": action.delta,
+        "depth": action.depth,
+        "saved_states": action.saved_states,
+    })
+}
+
 fn run_adjoint(options: &Options) -> Result<(), String> {
     let experiment = Experiment::load(&options.experiment)?;
     std::fs::create_dir_all(&options.out)
@@ -300,7 +342,35 @@ fn run_adjoint(options: &Options) -> Result<(), String> {
     }
 
     let background = experiment.background_flat();
-    let result = adjoint(&experiment, &background, &weights, options.every);
+    let (result, action_files) = match options.storage {
+        Storage::Full => {
+            if options.checkpoints.is_some() {
+                return Err("--checkpoints applies to --storage treeverse".into());
+            }
+            let result = adjoint(&experiment, &background, &weights, options.every);
+            (result, Vec::new())
+        }
+        Storage::Treeverse => {
+            if options.every.is_some() {
+                return Err("--every is not supported with --storage treeverse".into());
+            }
+            let checkpoints = options
+                .checkpoints
+                .ok_or("--storage treeverse requires --checkpoints <budget>")?;
+            let result = adjoint_treeverse(&experiment, &background, &weights, checkpoints);
+            let mut files = Vec::with_capacity(result.actions.len());
+            for (shot_index, actions) in result.actions.iter().enumerate() {
+                let name = format!("actions-{shot_index}.json");
+                let path = options.out.join(&name);
+                let payload: Vec<Value> = actions.iter().map(action_json).collect();
+                let text = serde_json::to_string(&payload).map_err(|error| error.to_string())?;
+                std::fs::write(&path, format!("{text}\n"))
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                files.push(name);
+            }
+            (result, files)
+        }
+    };
 
     let image_path = options.out.join("image.npy");
     write_npy_f64(&image_path, &[experiment.nz, experiment.nx], &result.image)
@@ -340,17 +410,24 @@ fn run_adjoint(options: &Options) -> Result<(), String> {
         .stats
         .per_shot
         .iter()
-        .map(|shot| {
-            json!({
-                "reverse_calls": shot.reverse_calls,
-                "scheduler_forward_calls": shot.scheduler_forward_calls,
-                "peak_saved_states": shot.peak_saved_states,
-            })
+        .enumerate()
+        .map(|(shot_index, shot)| {
+            let mut map = Map::new();
+            map.insert(
+                "scheduler_forward_calls".into(),
+                json!(shot.scheduler_forward_calls),
+            );
+            map.insert("reverse_calls".into(), json!(shot.reverse_calls));
+            map.insert("peak_saved_states".into(), json!(shot.peak_saved_states));
+            if let Some(name) = action_files.get(shot_index) {
+                map.insert("actions_file".into(), json!(name));
+            }
+            Value::Object(map)
         })
         .collect();
     let statistics = json!({
-        "storage": "full",
-        "checkpoints": Value::Null,
+        "storage": result.stats.storage.as_str(),
+        "checkpoints": result.stats.checkpoints,
         "reverse_calls": result.stats.reverse_calls,
         "scheduler_forward_calls": result.stats.scheduler_forward_calls,
         "peak_saved_states": result.stats.peak_saved_states,

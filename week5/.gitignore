@@ -1,0 +1,5 @@
+# Week 5 local environment and regenerable/official coursework data.
+# The official inputs/ are course materials and are not committed.
+.venv/
+inputs/
+*.npy

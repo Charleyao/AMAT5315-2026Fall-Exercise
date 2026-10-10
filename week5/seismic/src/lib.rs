@@ -12,6 +12,8 @@
 //! with a five-point Laplacian, zero outer Dirichlet boundary, a quadratic
 //! sponge, a Ricker source and unit-peak Gaussian footprints.
 
+pub mod born;
+
 use serde::Deserialize;
 use serde_json::Value;
 use std::fs::File;
@@ -461,5 +463,80 @@ mod tests {
         let c = experiment.background_flat();
         let result = forward(&experiment, &c, experiment.shots[0], None, false);
         assert!(result.traces.iter().all(|v| v.abs() < 1e-15));
+    }
+
+    /// A small non-zero velocity perturbation for the Born tangent tests.
+    fn tiny_perturbation(nx: usize, nz: usize) -> Vec<Vec<f64>> {
+        (0..nz)
+            .map(|z| {
+                (0..nx)
+                    .map(|x| 0.1 * (0.7 * x as f64 + 1.3 * z as f64).sin())
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn kernel_primal_matches_the_validated_forward_solver() {
+        let experiment = tiny_experiment();
+        let c = experiment.background_flat();
+        let computed = crate::born::kernel_traces(&experiment, &c);
+        let n_receivers = experiment.receivers.len();
+        let size = experiment.steps * n_receivers;
+        for (shot_index, shot) in experiment.shots.iter().enumerate() {
+            let reference = forward(&experiment, &c, *shot, None, false);
+            let base = shot_index * size;
+            for (offset, (actual, expected)) in computed[base..base + size]
+                .iter()
+                .zip(reference.traces.iter())
+                .enumerate()
+            {
+                let tolerance = 1e-12 * expected.abs().max(1.0);
+                assert!(
+                    (actual - expected).abs() <= tolerance,
+                    "trace {offset}: Enzyme kernel {actual} vs forward {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn born_jvp_matches_central_finite_differences() {
+        let mut experiment = tiny_experiment();
+        experiment.perturbation = tiny_perturbation(experiment.nx, experiment.nz);
+        let c = experiment.background_flat();
+        let m = experiment.perturbation_flat();
+        let n_receivers = experiment.receivers.len();
+        let n_shots = experiment.shots.len();
+        let size = experiment.steps * n_receivers;
+
+        let jvp = crate::born::born(&experiment, &c, &m);
+        assert_eq!(jvp.len(), n_shots * size);
+
+        let epsilon = 1e-6;
+        let mut finite = vec![0.0; n_shots * size];
+        for (shot_index, shot) in experiment.shots.iter().enumerate() {
+            let plus: Vec<f64> = c.iter().zip(m.iter()).map(|(c, m)| c + epsilon * m).collect();
+            let minus: Vec<f64> = c.iter().zip(m.iter()).map(|(c, m)| c - epsilon * m).collect();
+            let forward_plus = forward(&experiment, &plus, *shot, None, false);
+            let forward_minus = forward(&experiment, &minus, *shot, None, false);
+            let base = shot_index * size;
+            for i in 0..size {
+                finite[base + i] =
+                    (forward_plus.traces[i] - forward_minus.traces[i]) / (2.0 * epsilon);
+            }
+        }
+
+        let numerator: f64 = jvp
+            .iter()
+            .zip(finite.iter())
+            .map(|(a, b)| (a - b) * (a - b))
+            .sum();
+        let denominator: f64 = finite.iter().map(|v| v * v).sum();
+        let relative = (numerator / denominator).sqrt();
+        assert!(
+            relative < 1e-6,
+            "Born JVP vs central finite differences relative error {relative}"
+        );
     }
 }

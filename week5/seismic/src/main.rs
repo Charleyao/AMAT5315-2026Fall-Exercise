@@ -6,6 +6,7 @@
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
+use seismic::born::born;
 use seismic::{forward, write_npy_f32, write_npy_f64, Experiment};
 
 struct Options {
@@ -211,15 +212,71 @@ fn run_forward(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+fn run_born(options: &Options) -> Result<(), String> {
+    if options.every.is_some() {
+        return Err("--every applies to forward or adjoint, not born".into());
+    }
+    let experiment = Experiment::load(&options.experiment)?;
+    std::fs::create_dir_all(&options.out)
+        .map_err(|error| format!("{}: {error}", options.out.display()))?;
+
+    let background = experiment.background_flat();
+    let perturbation = experiment.perturbation_flat();
+    let n_shots = experiment.shots.len();
+    let steps = experiment.steps;
+    let n_receivers = experiment.receivers.len();
+    let shot_size = steps * n_receivers;
+
+    let data = born(&experiment, &background, &perturbation);
+    let data_path = options.out.join("born_data.npy");
+    write_npy_f64(&data_path, &[n_shots, steps, n_receivers], &data)
+        .map_err(|error| format!("{}: {error}", data_path.display()))?;
+
+    let mut run = Map::new();
+    run.insert("experiment".into(), compact_experiment(&experiment));
+    run.insert(
+        "experiment_file".into(),
+        json!(options.experiment.to_string_lossy()),
+    );
+    let run_path = options.out.join("run.json");
+    let run_text = serde_json::to_string_pretty(&Value::Object(run))
+        .map_err(|error| error.to_string())?;
+    std::fs::write(&run_path, format!("{run_text}\n"))
+        .map_err(|error| format!("{}: {error}", run_path.display()))?;
+
+    let result = json!({
+        "mode": "born",
+        "nx": experiment.nx,
+        "nz": experiment.nz,
+        "steps": experiment.steps,
+        "dt": experiment.dt,
+        "dx": experiment.dx,
+        "shots": experiment.shots,
+        "receivers": experiment.receivers,
+    });
+    let result_path = options.out.join("result.json");
+    let result_text = serde_json::to_string(&result).map_err(|error| error.to_string())?;
+    std::fs::write(&result_path, format!("{result_text}\n"))
+        .map_err(|error| format!("{}: {error}", result_path.display()))?;
+
+    // Official contract: a header, then one line per shot.
+    println!("shot\tmode\tdata_l2_norm");
+    for shot_index in 0..n_shots {
+        let slice = &data[shot_index * shot_size..(shot_index + 1) * shot_size];
+        let norm = slice.iter().map(|value| value * value).sum::<f64>().sqrt();
+        println!("{shot_index}\tborn\t{norm:.9}");
+    }
+
+    Ok(())
+}
+
 fn main() {
-    let result = parse_options().and_then(|options| {
-        if options.mode != "forward" {
-            return Err(format!(
-                "unsupported mode '{}': only 'forward' is implemented",
-                options.mode
-            ));
-        }
-        run_forward(&options)
+    let result = parse_options().and_then(|options| match options.mode.as_str() {
+        "forward" => run_forward(&options),
+        "born" => run_born(&options),
+        other => Err(format!(
+            "unsupported mode '{other}': only 'forward' and 'born' are implemented"
+        )),
     });
     if let Err(error) = result {
         eprintln!("seismic: {error}");

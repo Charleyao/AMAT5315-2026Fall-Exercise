@@ -1,10 +1,11 @@
-# Week 7 — Part 1 and Part 2 VERIFY (1)
+# Week 7 — Part 1, Part 2 VERIFY (1), and Part 3 VERIFY (1)
 
-This specification covers **Part 1** and **Part 2 VERIFY (1)**: the
-Gaussian-mixture forward process, the time-conditioned noise predictor, DDPM
-reverse sampling, VERIFY (1)–(3), deterministic DDIM sampling, and comparison
-with the exact Gaussian-mixture conditional-mean predictor. Part 3 and later
-high-dimensional diffusion work are out of scope.
+This specification covers **Part 1**, **Part 2 VERIFY (1)**, and **Part 3
+VERIFY (1)**: the Gaussian-mixture forward process, the time-conditioned noise
+predictor, DDPM reverse sampling, VERIFY (1)–(3), deterministic DDIM sampling,
+comparison with the exact conditional-mean predictor, and Flow Matching of a new
+velocity network. Part 3 VERIFY (2) and later high-dimensional diffusion work
+are out of scope.
 
 ## Data distribution
 
@@ -133,6 +134,33 @@ no clipping is applied.
     cluster width is `sqrt((std_x^2 + std_y^2) / 2)`.
 11. Save figures in `evidence/` and raw samples/metrics in `artifacts/`.
 
+## Part 3 VERIFY (1): Flow Matching velocity fields
+
+1. Create `flow.toml` with the page-11 settings:
+   - hidden layers `[128, 128, 128]`, SiLU;
+   - 32 sinusoidal time features, time scale `1000`;
+   - Adam with learning rate `0.001` and cosine decay to zero;
+   - batch size `512`, `25000` updates, seed `2029`, `float32`.
+2. Train a new velocity network from scratch:
+   - sample `x0` from the four-component Gaussian mixture;
+   - sample `z ~ N(0, I)` and `s ~ Uniform[0, 1]`;
+   - construct `x_s = (1-s) x0 + s z`;
+   - target velocity `u = z - x0`;
+   - minimize mean squared velocity prediction error.
+3. Implement Euler sampling backward from `s=1` to `s=0`.
+4. Implement the exact analytical marginal velocity
+   `E[z - x0 | x_s]` for the Gaussian mixture.
+5. For `s = 0.1, 0.5, 0.9`, plot learned and exact velocity fields on exactly
+   the same spatial grid. The grid is component-adapted: each mixture
+   component contributes a `7 x 7` local grid around its forward-marginal mean
+   `(1-s) * center`, with extent `±2` marginal standard deviations.
+6. Compute the relative RMS field difference
+   `||v_learned - v_exact||_RMS / ||v_exact||_RMS` at each `s`, and verify all
+   three values are below `0.1`.
+7. Print a PASS/FAIL table. Save velocity-field and training-loss figures in
+   `evidence/`; save checkpoints, loss history, field grids, and raw metrics in
+   `artifacts/`.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -145,13 +173,15 @@ no clipping is applied.
   - VERIFY (3) reverse-diffusion animation, reverse keyframes,
     generated-vs-target figure, and PASS/FAIL log;
   - Part 2 trajectory comparison, DDIM/DDPM/target sample comparison, exact
-    predictor comparison, and PASS/FAIL log.
-- Raw checkpoints, losses, trajectories, samples, and numerical results in
-  `week7/artifacts/` (ignored by Git).
+    predictor comparison, and PASS/FAIL log;
+  - Part 3 learned/exact velocity-field figure, training-loss figure, and
+    PASS/FAIL log.
+- Raw checkpoints, losses, trajectories, samples, velocity grids, and
+  numerical results in `week7/artifacts/` (ignored by Git).
 
 ## Out of scope
 
-- Part 3 and later tasks.
+- Part 3 VERIFY (2) and later tasks.
 - CIFAR-10 diffusion or any high-dimensional image training.
 - Use or modification of the provided `week7/data/` resources.
 

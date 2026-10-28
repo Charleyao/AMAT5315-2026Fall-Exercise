@@ -1,0 +1,32 @@
+Week 7 Part 3 VERIFY (1) -- Flow Matching velocity fields
+device: cpu:0
+config: flow.toml
+updates: 25000
+seed: 2029
+checkpoints: [0, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 25000]
+training new velocity network from scratch ...
+checkpoint update=    50 mean_loss=3.975318
+checkpoint update=   100 mean_loss=3.450329
+checkpoint update=   200 mean_loss=3.072074
+checkpoint update=   500 mean_loss=2.680209
+checkpoint update=  1000 mean_loss=2.686647
+checkpoint update=  2000 mean_loss=2.636612
+checkpoint update=  5000 mean_loss=2.627737
+checkpoint update= 10000 mean_loss=2.632966
+checkpoint update= 25000 mean_loss=2.618299
+evaluating learned and exact velocity fields ...
+
+Field comparison: ||learned - exact||_RMS / ||exact||_RMS
+s | relative RMS | threshold | result
+s=0.1 | 0.011383 | < 0.1 | PASS
+s=0.5 | 0.015509 | < 0.1 | PASS
+s=0.9 | 0.037311 | < 0.1 | PASS
+Overall Part 3 VERIFY (1): PASS
+
+final training loss (last update): 2.548278
+final 50-update mean loss: 2.618299
+velocity field grid: 4 components x 7x7 local points, extent +/-2.0 marginal std
+Part 3 VERIFY (1): PASS
+velocity fields: evidence/flow_velocity_fields.png
+training loss: evidence/flow_training_loss.png
+results: artifacts/flow_results.json

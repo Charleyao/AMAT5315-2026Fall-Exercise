@@ -77,7 +77,7 @@ cd week8
 uv sync
 uv run python -m src.download_model   # verifies/skips existing files
 uv run python -m src.part1            # writes artifacts + figure
-uv run python -m pytest -q            # 88 tests total (Parts 1-6)
+uv run python -m pytest -q            # 90 tests total (Parts 1-6)
 ```
 
 The figure maps each cosine `c` to a unit arrow at angle `arccos(c)`:
@@ -295,8 +295,8 @@ uv run python -m pytest -q
 ```
 
 The full pipeline takes about 10 minutes on CPU, dominated by the 4000 MLP
-training steps. The full test suite currently contains **88 passing tests**
-(16 Part 1, 14 Part 2, 19 Part 3, 9 Part 4, 20 Part 5, 10 Part 6).
+training steps. The full test suite currently contains **90 passing tests**
+(16 Part 1, 14 Part 2, 19 Part 3, 9 Part 4, 22 Part 5, 10 Part 6).
 # Week 8 — Part 4: Attention: A Memory Built from the Text
 
 Status: **Part 4 complete — VERIFY (1) PASS**. Parts 1–3
@@ -495,23 +495,41 @@ original T=1 model distribution.
 - T=0.7: |z| > 40 ✅
 - Figure: `evidence/figure_verify4_surprise_entropy.png`
 
+## Optional extension: Figure 18 attention heads
+
+Figure 18 visualizes two causal attention heads from the trained Part 5
+checkpoint on the first 24 tokens of the first held-out TinyStories story:
+**Layer 1, Head 1** and **Layer 2, Head 2**. Rows are query tokens and columns
+are key tokens, both labelled with decoded SentencePiece/BPE pieces. The upper
+triangle is zero (future tokens are masked), and every attention row sums to 1.
+The heatmaps show that the first layer attends mostly locally, while the second
+layer mixes information over a wider span of the opening context.
+
+The checkpoint is loaded directly; the model is **not retrained**.
+
+- Figure: `evidence/figure18_attention_heads.png`
+- Reproduction: `uv run python -m src.part5_figure18`
+
 ## Part 5 files
 
 | Path | Purpose |
 |---|---|
-| `src/transformer.py` | Transformer, loss, validation-by-position, training, checkpoint loading |
+| `src/transformer.py` | Transformer, loss, validation-by-position, training, checkpoint loading, attention extraction |
 | `src/sampling.py` | Temperature, top-k, top-p, min-p, chi-squared, n-gram sampling |
 | `src/part5_generation.py` | Autoregressive generation and surprise/entropy scoring |
 | `src/part5_plotting.py` | BPC, Figure 17, training, samples, VERIFY (4) figures |
+| `src/part5_figure18.py` | Checkpoint-only Figure 18 attention-head heatmaps |
 | `src/part5.py` | End-to-end Part 5 pipeline and report |
 | `tests/test_transformer.py` | Architecture, masking, normalization, checkpoint tests |
 | `tests/test_sampling.py` | Sampling/truncation/chi-squared/generation tests |
 | `tests/test_part5_artifacts.py` | Saved-output acceptance checks |
+| `tests/test_part5_figure18.py` | Causal/row-sum checks and saved Figure 18 checks |
 | `evidence/figure_verify1_bits_per_char.png` | Model comparison |
 | `evidence/figure_verify1_model_samples.png` | Five temperature-1 samples |
 | `evidence/figure17_context_length.png` | Figure 17 reproduction |
 | `evidence/figure_transformer_training.png` | Training and validation curves |
 | `evidence/figure_sampling_method_examples.png` | Four sampling-setting examples |
+| `evidence/figure18_attention_heads.png` | Optional Figure 18 attention-head heatmaps |
 | `evidence/figure_verify4_surprise_entropy.png` | Surprise versus entropy |
 | `evidence/part5_verify.txt` | Full VERIFY (1)–(4) report |
 | `artifacts/part5_results.json` | Combined results and acceptance flags |
@@ -528,6 +546,7 @@ original T=1 model distribution.
 cd week8
 uv sync
 uv run python -m src.part5
+uv run python -m src.part5_figure18   # Figure 18; reuses checkpoint
 uv run python -m pytest -q
 ```
 
@@ -704,6 +723,7 @@ Part 4: evidence/figure13_attention_recall.png
 Part 5: evidence/figure_verify1_bits_per_char.png
         evidence/figure_verify1_model_samples.png
         evidence/figure17_context_length.png
+        evidence/figure18_attention_heads.png
         evidence/figure_transformer_training.png
         evidence/figure_sampling_method_examples.png
         evidence/figure_verify4_surprise_entropy.png
@@ -734,6 +754,7 @@ uv run python -m src.part4
 
 # Part 5 (about 10 minutes: Transformer training)
 uv run python -m src.part5
+uv run python -m src.part5_figure18   # optional Figure 18; checkpoint only
 
 # Part 6
 uv run python -m src.download_part6_data
@@ -744,4 +765,4 @@ uv run python -m pytest -q
 ```
 
 Datasets, checkpoints, and artifacts are excluded from Git via `.gitignore`.
-The full automated suite contains **88 passing tests**.
+The full automated suite contains **90 passing tests**.

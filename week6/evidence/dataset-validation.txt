@@ -1,0 +1,23 @@
+MNIST
+  [reuse] inputs/mnist/train-images-idx3-ubyte.gz (checksum OK)
+  [reuse] inputs/mnist/train-labels-idx1-ubyte.gz (checksum OK)
+  [reuse] inputs/mnist/t10k-images-idx3-ubyte.gz (checksum OK)
+  [reuse] inputs/mnist/t10k-labels-idx1-ubyte.gz (checksum OK)
+CIFAR-10
+  [reuse] inputs/cifar10/cifar-10-binary.tar.gz (checksum OK)
+  [reuse] inputs/cifar10/cifar-10-batches-bin (already extracted)
+
+Parsing and validating the original binary formats
+MNIST (28x28 grayscale, 10 digit classes)
+  train  images=60000  shape=(60000, 28, 28)  pixels=[0, 255]  labels=60000
+         per-class counts: [5923, 6742, 5958, 6131, 5842, 5421, 5918, 6265, 5851, 5949]
+  test   images=10000  shape=(10000, 28, 28)  pixels=[0, 255]  labels=10000
+         per-class counts: [980, 1135, 1032, 1010, 982, 892, 958, 1028, 974, 1009]
+CIFAR-10 (32x32x3 RGB, 10 object classes)
+  train  images=50000  shape=(50000, 32, 32, 3)  pixels=[0, 255]  labels=50000
+         per-class counts: [5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000]
+  test   images=10000  shape=(10000, 32, 32, 3)  pixels=[0, 255]  labels=10000
+         per-class counts: [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
+  classes: ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+
+All downloads and integrity checks passed.

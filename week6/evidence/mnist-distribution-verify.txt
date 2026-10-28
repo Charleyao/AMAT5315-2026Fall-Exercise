@@ -1,0 +1,21 @@
+MNIST class counts and fractions (first two training images per class)
+digit  train n  train frac   test n  test frac
+    0     5923      0.0987      980     0.0980
+    1     6742      0.1124     1135     0.1135
+    2     5958      0.0993     1032     0.1032
+    3     6131      0.1022     1010     0.1010
+    4     5842      0.0974      982     0.0982
+    5     5421      0.0903      892     0.0892
+    6     5918      0.0986      958     0.0958
+    7     6265      0.1044     1028     0.1028
+    8     5851      0.0975      974     0.0974
+    9     5949      0.0992     1009     0.1009
+  sum    60000      1.0000    10000     1.0000
+
+First two training indices per class (stored order):
+{0: [1, 21], 1: [3, 6], 2: [5, 16], 3: [7, 10], 4: [2, 9], 5: [0, 11], 6: [13, 18], 7: [15, 29], 8: [17, 31], 9: [4, 19]}
+
+VERIFY: 10/10 classes labeled; digit 1 most frequent, digit 5 least frequent;
+        fractions sum to 1 in both splits; train/test assignments unchanged.
+
+Saved figure: evidence/mnist_distribution.png

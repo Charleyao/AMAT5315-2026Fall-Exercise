@@ -1,0 +1,16 @@
+# Week 6 local environment and downloaded datasets.
+# Datasets are downloaded into inputs/ and must not be committed.
+.venv/
+inputs/mnist/*
+!inputs/mnist/.gitkeep
+inputs/cifar10/*
+!inputs/cifar10/.gitkeep
+
+# Raw experiment outputs are regenerable and stay out of Git.
+artifacts/
+
+# NOTE: evidence/ is intentionally NOT ignored -- evidence figures are tracked.
+
+# Local caches.
+__pycache__/
+.pytest_cache/

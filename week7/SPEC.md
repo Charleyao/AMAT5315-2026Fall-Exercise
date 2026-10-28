@@ -1,8 +1,10 @@
-# Week 7 — Part 1: Diffusion Training and VERIFY (1)–(3)
+# Week 7 — Part 1 and Part 2 VERIFY (1)
 
-This specification covers **Part 1 only**: the Gaussian-mixture forward process,
-the time-conditioned noise predictor, DDPM reverse sampling, and VERIFY (1),
-(2), and (3). Part 2 and later high-dimensional diffusion work are out of scope.
+This specification covers **Part 1** and **Part 2 VERIFY (1)**: the
+Gaussian-mixture forward process, the time-conditioned noise predictor, DDPM
+reverse sampling, VERIFY (1)–(3), deterministic DDIM sampling, and comparison
+with the exact Gaussian-mixture conditional-mean predictor. Part 3 and later
+high-dimensional diffusion work are out of scope.
 
 ## Data distribution
 
@@ -103,6 +105,34 @@ no clipping is applied.
    animation in `evidence/`, and save the raw samples, trajectory, and metrics
    in `artifacts/`.
 
+## Part 2 VERIFY (1): deterministic DDIM vs DDPM
+
+1. Reuse the trained update-25000 noise predictor. Do not retrain.
+2. Implement deterministic DDIM (eta = 0):
+
+   ```text
+   x0_pred = (x_t - sqrt(1 - alpha_bar_t) * eps_theta(x_t, t)) / sqrt(alpha_bar_t)
+   x_prev = sqrt(alpha_bar_prev) * x0_pred
+            + sqrt(1 - alpha_bar_prev) * eps_theta(x_t, t)
+   ```
+
+   The final transition to `t=0` is implicit. Support any strictly decreasing
+   subset of noise levels in `1, ..., 1000`.
+3. Implement the exact conditional-mean noise predictor
+   `E[epsilon | x_t]` for the equal-weight Gaussian mixture, using the
+   posterior responsibilities of the four components.
+4. Run DDIM over 1000 levels twice from the same starting Gaussian noise.
+5. Run DDPM twice from the same starting Gaussian noise with two different
+   reverse-step noise draws.
+6. Plot the DDIM trajectory and the two DDPM trajectories for a shared sample.
+7. Generate 2000 DDIM samples and 2000 DDPM samples, and compare them with 2000
+   exact target samples.
+8. Print the largest difference between the two DDIM runs.
+9. Report whether DDIM cluster fractions are within `0.015` of `0.25`.
+10. Report whether DDIM and DDPM widths are between `0.29` and `0.32`. A
+    cluster width is `sqrt((std_x^2 + std_y^2) / 2)`.
+11. Save figures in `evidence/` and raw samples/metrics in `artifacts/`.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -113,13 +143,15 @@ no clipping is applied.
   - VERIFY (2) endpoint-evolution animation, checkpoint grid, training-loss
     figure, and log;
   - VERIFY (3) reverse-diffusion animation, reverse keyframes,
-    generated-vs-target figure, and PASS/FAIL log.
+    generated-vs-target figure, and PASS/FAIL log;
+  - Part 2 trajectory comparison, DDIM/DDPM/target sample comparison, exact
+    predictor comparison, and PASS/FAIL log.
 - Raw checkpoints, losses, trajectories, samples, and numerical results in
   `week7/artifacts/` (ignored by Git).
 
 ## Out of scope
 
-- Part 2 and later tasks.
+- Part 3 and later tasks.
 - CIFAR-10 diffusion or any high-dimensional image training.
 - Use or modification of the provided `week7/data/` resources.
 

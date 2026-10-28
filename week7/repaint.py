@@ -84,6 +84,10 @@ def repaint_batch(
     betas = linear_beta_schedule(1000)
     alpha_bars = alpha_bars_from_betas(betas)
     seed_keys = jnp.stack([jax.random.PRNGKey(int(seed)) for seed in seeds])
+    # The same completion seed is used for every image, but the image index is
+    # mixed into the key so each visible context gets independent noise.
+    image_indices = jnp.arange(batch, dtype=jnp.int32)
+    seed_keys = jax.vmap(jax.random.fold_in)(seed_keys, image_indices)
     split_keys = jax.vmap(
         lambda key: jax.random.split(key)
     )(seed_keys)
@@ -93,6 +97,13 @@ def repaint_batch(
         lambda key: jax.random.normal(key, (32, 32, 3), dtype=DTYPE)
     )(key_initial)
     noise = _noise_factory(key_noise, (32, 32, 3))
+    # Seed the known border with its t=1000 forward observation before the
+    # first network evaluation.
+    initial_known_noise = noise(0)
+    x = mask * (
+        jnp.sqrt(alpha_bars[1000]) * observations
+        + jnp.sqrt(1.0 - alpha_bars[1000]) * initial_known_noise
+    ) + (1.0 - mask) * x
     model = jax.jit(lambda sample, t: unet_apply(params, sample, t, config))
 
     evaluations = 0
@@ -199,6 +210,18 @@ def repaint_metrics(
         ),
         axis=(2, 3, 4, 5),
     )
+    cross_image_differences = []
+    for seed in range(completions.shape[1]):
+        for first in range(completions.shape[0]):
+            for second in range(first + 1, completions.shape[0]):
+                cross_image_differences.append(
+                    np.mean(
+                        np.abs(
+                            completions[first, seed][hidden_bool]
+                            - completions[second, seed][hidden_bool]
+                        )
+                    )
+                )
 
     return {
         "hidden_mse": hidden_mse.tolist(),
@@ -215,6 +238,9 @@ def repaint_metrics(
         "per_image_max_hidden_std": max_hidden_std.tolist(),
         "per_image_min_hidden_std": min_hidden_std.tolist(),
         "max_pairwise_hidden_difference": float(pairwise_difference.max()),
+        "cross_image_hidden_mean_abs_difference": float(
+            np.mean(cross_image_differences)
+        ),
         "variance": variance,
         "completions_in_range": bool(
             completions.min() >= -1.0 - 1e-6

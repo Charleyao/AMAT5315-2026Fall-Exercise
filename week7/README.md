@@ -317,10 +317,10 @@ Each image was completed with seeds `7201, 7202, 7203, 7204`.
 
 | Image | hidden MSE (seeds 7201–7204) |
 |---:|---|
-| 0 (cat) | `0.097827`, `0.091138`, `0.076209`, `0.096732` |
-| 1 (ship) | `0.182069`, `0.188578`, `0.161714`, `0.155830` |
-| 2 (ship) | `0.076189`, `0.072673`, `0.070544`, `0.070994` |
-| 3 (airplane) | `0.123379`, `0.114556`, `0.127970`, `0.113593` |
+| 0 (cat) | `0.105911`, `0.110246`, `0.098663`, `0.105096` |
+| 1 (ship) | `0.192275`, `0.176569`, `0.180236`, `0.200002` |
+| 2 (ship) | `0.069891`, `0.088415`, `0.060007`, `0.078262` |
+| 3 (airplane) | `0.117485`, `0.126996`, `0.107392`, `0.123828` |
 
 | Check | Value | Result |
 |-------|-------|:------:|
@@ -328,8 +328,17 @@ Each image was completed with seeds `7201, 7202, 7203, 7204`.
 | Finite completions | all finite | PASS |
 | Network evaluations | `99` | PASS |
 | Maximum observed-pixel change | `0.000e+00` (`< 1e-5`) | PASS |
-| Completions differ inside mask | max hidden std `0.715093`; max pairwise diff `1.724194` | PASS |
+| Completions differ inside mask | max hidden std `0.744964`; max pairwise diff `1.886414` | PASS |
+| Cross-image context response | mean hidden difference `0.421430` (`> 0.01`) | PASS |
 | Completion range | within `[-1,1]` | PASS |
+
+The same completion seed now receives independent noise for each input image, so
+completions no longer collapse to the same hidden texture; the cross-image
+mean absolute hidden difference is `0.421430`. The four contexts are visibly
+different (cat, two ships, airplane), and the completion colors follow the
+visible border. With the mandated 99 network evaluations, the hidden interiors
+remain texture-noisy and are not photorealistic; this is reported as a
+limitation rather than claimed as clean visual inpainting.
 
 **Part 5 VERIFY (1): PASS.**
 

@@ -91,6 +91,9 @@ def main() -> int:
         metrics["max_hidden_std"] > 1e-4
         and metrics["max_pairwise_hidden_difference"] > 1e-4
     )
+    context_ok = bool(
+        metrics["cross_image_hidden_mean_abs_difference"] > 1e-2
+    )
     clipping_ok = bool(metrics["completions_in_range"])
     overall_pass = bool(
         shape_ok
@@ -98,6 +101,7 @@ def main() -> int:
         and evaluations_ok
         and observed_ok
         and differ_ok
+        and context_ok
         and clipping_ok
     )
 
@@ -160,6 +164,10 @@ def main() -> int:
                 "max_pairwise_hidden_difference"
             ],
             "completions_differ": differ_ok,
+            "cross_image_hidden_mean_abs_difference": metrics[
+                "cross_image_hidden_mean_abs_difference"
+            ],
+            "context_response_above_0_01": context_ok,
             "completions_in_range_minus1_plus1": clipping_ok,
             "overall_pass": overall_pass,
         },
@@ -215,6 +223,11 @@ def main() -> int:
         f"max pairwise hidden difference = "
         f"{metrics['max_pairwise_hidden_difference']:.6f}: "
         f"{'PASS' if differ_ok else 'FAIL'}"
+    )
+    print(
+        "  cross-image hidden mean abs difference = "
+        f"{metrics['cross_image_hidden_mean_abs_difference']:.6f} "
+        f"(> 0.01): {'PASS' if context_ok else 'FAIL'}"
     )
     print(
         f"  completions within [-1,1]: "

@@ -10,17 +10,18 @@ running batched RePaint ...
 
 Hidden-pixel MSE per completion:
 image | seed 7201 | seed 7202 | seed 7203 | seed 7204
-    0 | 0.097827 | 0.091138 | 0.076209 | 0.096732
-    1 | 0.182069 | 0.188578 | 0.161714 | 0.155830
-    2 | 0.076189 | 0.072673 | 0.070544 | 0.070994
-    3 | 0.123379 | 0.114556 | 0.127970 | 0.113593
+    0 | 0.105911 | 0.110246 | 0.098663 | 0.105096
+    1 | 0.192275 | 0.176569 | 0.180236 | 0.200002
+    2 | 0.069891 | 0.088415 | 0.060007 | 0.078262
+    3 | 0.117485 | 0.126996 | 0.107392 | 0.123828
 
 VERIFY (1) checks
   completion shape (4, 4, 32, 32, 3): PASS
   finite completions: PASS
   network evaluations = 99 (expected 99): PASS
   max observed-pixel change = 0.000e+00 (< 1e-5): PASS
-  max hidden-pixel std = 0.715093; max pairwise hidden difference = 1.724194: PASS
+  max hidden-pixel std = 0.744964; max pairwise hidden difference = 1.886414: PASS
+  cross-image hidden mean abs difference = 0.421430 (> 0.01): PASS
   completions within [-1,1]: PASS
 Part 5 VERIFY (1): PASS
 figure: evidence/cifar_repaint_completions.png

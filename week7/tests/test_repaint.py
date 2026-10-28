@@ -45,13 +45,15 @@ def test_repaint_metrics_detects_observed_change_and_hidden_variance():
     mask = repaint.make_repaint_mask()
     hidden = np.broadcast_to((1.0 - mask) > 0.5, (32, 32, 3))
     for seed in range(4):
-        completions[:, seed][:, hidden] = (seed + 1) * 0.1
+        completions[0, seed][hidden] = (seed + 1) * 0.1
+        completions[1, seed][hidden] = -(seed + 1) * 0.1
 
     metrics = repaint.repaint_metrics(completions, originals, mask)
 
     assert metrics["observed_max_change"] == pytest.approx(0.0)
     assert metrics["max_hidden_std"] > 0.0
     assert metrics["max_pairwise_hidden_difference"] > 0.0
+    assert metrics["cross_image_hidden_mean_abs_difference"] > 0.0
     assert metrics["completions_in_range"] is True
     assert len(metrics["hidden_mse"]) == 2
     assert len(metrics["hidden_mse"][0]) == 4

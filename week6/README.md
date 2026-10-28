@@ -291,6 +291,49 @@ uv run python -m pytest -q        # 65 tests
 - Architecture diagram has connections only between layers (70 representative
   visible-hidden lines for 10×7 drawn nodes) and none within a layer.
 
+## Part 2 — VERIFY (2): CD-1 vs CD-10 training
+
+`cd_training.py` trains two RBMs with **identical initialization** (seed 6601),
+**identical data order** (per-epoch shuffles from training seed 6602) and the
+same `rbm.toml` settings; only the Gibbs chain length differs (1 vs 10).
+
+- **Optimizer:** plain SGD, learning rate 0.1, batch size 100, 20 epochs,
+  float32, no momentum, no weight decay.
+- **CD surrogate** (recorded before each update, averaged per epoch):
+  `mean[F(v0) - F(stop_gradient(vk))]`, where `vk` is the visible state after
+  `k` block-Gibbs steps started at the data batch. Minimizing this surrogate
+  gives the standard CD update.
+- **One-step reconstruction error** (held out, first 64 test images, fixed
+  evaluation key from seed 6606): sample `h ~ P(h|v0)` and `v1 ~ P(v|h)`, then
+  report `mean((v0 - v1)²)`.
+
+> The CD surrogate is a stochastic approximation used as the training
+> objective. It is **not** the exact negative log-likelihood: the partition
+> function is intractable, so its value is never interpreted as an NLL.
+
+### VERIFY (2) results
+
+| Model | Initial recon. | Final recon. | Ratio | Runtime | Surrogate (first → last epoch) |
+|-------|---------------:|-------------:|------:|--------:|-------------------------------:|
+| CD-1  | 0.1708 | **0.0462** | 27.0% | 48.2 s | −17.3105 → −5.9360 |
+| CD-10 | 0.1708 | **0.0474** | 27.7% | 203.4 s | −14.3526 → −5.0289 |
+
+This matches the sheet's reference of approximately **0.17 → 0.047**. Both
+models start from the same parameters (identical initial error) and CD-10
+takes about 4× longer because each update runs 10 Gibbs steps instead of 1.
+
+![CD-1 vs CD-10 training curves](evidence/cd_training_curves.png)
+
+Verification status:
+
+- Final reconstruction error is **< 50%** of the initial error for both models.
+- All surrogate and reconstruction values are finite.
+- CD-1 and CD-10 have identical initialization and identical data order.
+- The CD surrogate is documented and annotated as approximate, not exact NLL.
+
+Raw per-epoch metrics are written to `artifacts/cd_training_metrics.json`
+(gitignored); the run log is `evidence/cd-training-verify.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -301,7 +344,8 @@ uv run python plot_mnist_distribution.py       # Part 1 VERIFY (1) figure
 uv run python plot_cifar10_distribution.py     # Part 1 VERIFY (2) figure
 uv run python rbm.py                           # RBM basics + finite checks
 uv run python verify1_figures.py               # Part 2 VERIFY (1) figures
-uv run python -m pytest -q                     # 65 tests
+uv run python cd_training.py                   # Part 2 VERIFY (2): CD-1 vs CD-10
+uv run python -m pytest -q                     # 73 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -317,6 +361,6 @@ after the checksum matches.
   `storage.googleapis.com`. `prepare_data.py` detects that and resolves the
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
-- Scope: Part 1 dataset preparation and distribution figures, plus Part 2
-  basic RBM and VERIFY (1). CD-1/CD-10 training, Part 2 VERIFY (2) and Part 3
-  are not implemented yet.
+- Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
+  RBM, VERIFY (1) figures and VERIFY (2) CD-1/CD-10 training. VERIFY (3),
+  VERIFY (4) and Part 3 are not implemented yet.

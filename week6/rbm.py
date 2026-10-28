@@ -20,8 +20,8 @@ Usage::
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -41,9 +41,11 @@ VISIBLE_UNITS = 784  # 28 * 28
 HIDDEN_UNITS = 128
 
 
-@dataclass(frozen=True)
-class RBM:
-    """RBM parameters: weights ``W`` and visible/hidden biases ``a``, ``b``."""
+class RBM(NamedTuple):
+    """RBM parameters: weights ``W`` and visible/hidden biases ``a``, ``b``.
+
+    A ``NamedTuple`` so JAX treats it as a pytree for ``jit``/``grad``.
+    """
 
     W: jax.Array  # (visible_units, hidden_units)
     a: jax.Array  # (visible_units,)

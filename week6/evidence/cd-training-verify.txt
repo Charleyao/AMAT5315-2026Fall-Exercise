@@ -1,0 +1,58 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+Training CD1 (k=1, 20 epochs)...
+    epoch  1/20: surrogate=-17.31051  recon=0.08582
+    epoch  2/20: surrogate=-15.74758  recon=0.07310
+    epoch  3/20: surrogate=-13.73807  recon=0.06682
+    epoch  4/20: surrogate=-12.43565  recon=0.06336
+    epoch  5/20: surrogate=-11.63187  recon=0.05997
+    epoch  6/20: surrogate=-10.97199  recon=0.05829
+    epoch  7/20: surrogate=-10.49313  recon=0.05656
+    epoch  8/20: surrogate=-10.07681  recon=0.05509
+    epoch  9/20: surrogate=-9.61566  recon=0.05232
+    epoch 10/20: surrogate=-9.28714  recon=0.05250
+    epoch 11/20: surrogate=-8.89932  recon=0.05080
+    epoch 12/20: surrogate=-8.47640  recon=0.04998
+    epoch 13/20: surrogate=-8.17117  recon=0.04913
+    epoch 14/20: surrogate=-7.73383  recon=0.04827
+    epoch 15/20: surrogate=-7.44822  recon=0.04793
+    epoch 16/20: surrogate=-7.03622  recon=0.04787
+    epoch 17/20: surrogate=-6.74659  recon=0.04642
+    epoch 18/20: surrogate=-6.48603  recon=0.04646
+    epoch 19/20: surrogate=-6.15077  recon=0.04586
+    epoch 20/20: surrogate=-5.93601  recon=0.04616
+Training CD10 (k=10, 20 epochs)...
+    epoch  1/20: surrogate=-14.35263  recon=0.08769
+    epoch  2/20: surrogate=-15.18291  recon=0.07498
+    epoch  3/20: surrogate=-12.97730  recon=0.06858
+    epoch  4/20: surrogate=-11.97130  recon=0.06429
+    epoch  5/20: surrogate=-11.04268  recon=0.06160
+    epoch  6/20: surrogate=-10.63088  recon=0.05899
+    epoch  7/20: surrogate=-10.14102  recon=0.05712
+    epoch  8/20: surrogate=-9.54175  recon=0.05499
+    epoch  9/20: surrogate=-9.02814  recon=0.05389
+    epoch 10/20: surrogate=-8.40428  recon=0.05202
+    epoch 11/20: surrogate=-7.69396  recon=0.05160
+    epoch 12/20: surrogate=-7.20140  recon=0.05096
+    epoch 13/20: surrogate=-6.74556  recon=0.05102
+    epoch 14/20: surrogate=-6.35010  recon=0.04976
+    epoch 15/20: surrogate=-6.02850  recon=0.04897
+    epoch 16/20: surrogate=-5.75498  recon=0.04833
+    epoch 17/20: surrogate=-5.50926  recon=0.04879
+    epoch 18/20: surrogate=-5.32217  recon=0.04849
+    epoch 19/20: surrogate=-5.10810  recon=0.04851
+    epoch 20/20: surrogate=-5.02888  recon=0.04737
+
+VERIFY (2) results
+  evaluation images: 64 (first 64 test images)
+  CD1: recon 0.1708 -> 0.0462 (27.0% of initial), runtime 48.2s
+         surrogate -17.3105 -> -5.9360
+  CD10: recon 0.1708 -> 0.0474 (27.7% of initial), runtime 203.4s
+         surrogate -14.3526 -> -5.0289
+
+  [ok] all metrics finite
+  [ok] final reconstruction error < 50% of initial error for both models
+  [ok] identical initialization for CD-1 and CD-10
+  [note] the CD surrogate is an approximate objective, not the exact NLL
+
+  metrics: artifacts/cd_training_metrics.json
+  figure:  evidence/cd_training_curves.png

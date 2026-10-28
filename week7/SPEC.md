@@ -1,11 +1,11 @@
-# Week 7 — Part 1, Part 2 VERIFY (1), and Part 3 VERIFY (1)
+# Week 7 — Parts 1–3 (through Part 3 VERIFY (2))
 
 This specification covers **Part 1**, **Part 2 VERIFY (1)**, and **Part 3
-VERIFY (1)**: the Gaussian-mixture forward process, the time-conditioned noise
-predictor, DDPM reverse sampling, VERIFY (1)–(3), deterministic DDIM sampling,
-comparison with the exact conditional-mean predictor, and Flow Matching of a new
-velocity network. Part 3 VERIFY (2) and later high-dimensional diffusion work
-are out of scope.
+VERIFY (1)–(2)**: the Gaussian-mixture forward process, the time-conditioned
+noise predictor, DDPM reverse sampling, VERIFY (1)–(3), deterministic DDIM
+sampling, comparison with the exact conditional-mean predictor, Flow Matching of
+a new velocity network, and the sampling-step comparison. Part 4 and later
+high-dimensional diffusion work are out of scope.
 
 ## Data distribution
 
@@ -161,6 +161,38 @@ no clipping is applied.
    `evidence/`; save checkpoints, loss history, field grids, and raw metrics in
    `artifacts/`.
 
+## Part 3 VERIFY (2): sampling-step comparison
+
+1. Reuse the trained diffusion and Flow Matching checkpoints. Do not retrain.
+2. Compare DDPM, DDIM, and Flow Matching at sampling steps `1, 2, 5, 10, 20,
+   50, 100`, plus `1000` steps for DDPM/DDIM.
+3. Use evenly spaced time/noise levels and 4000 generated samples per run.
+4. For coarse DDPM jumps from `t` to `t_prev`, use Equation (17):
+
+   ```text
+   x0_pred = (x_t - sqrt(1 - alpha_bar_t) * eps_theta(x_t, t)) / sqrt(alpha_bar_t)
+   jump_beta = 1 - alpha_bar_t / alpha_bar_prev
+   mean = sqrt(alpha_bar_prev) * jump_beta / (1 - alpha_bar_t) * x0_pred
+          + sqrt(alpha_bar_t / alpha_bar_prev)
+            * (1 - alpha_bar_prev) / (1 - alpha_bar_t) * x_t
+   jump_variance = (1 - alpha_bar_prev) / (1 - alpha_bar_t) * jump_beta
+   ```
+
+   The final jump to `t_prev=0` has zero variance.
+5. For every run, compute cluster populations, centers, x/y standard
+   deviations, isotropic cluster width `sqrt((std_x^2 + std_y^2)/2)`, and
+   energy distance against 4000 exact target samples.
+6. Estimate the energy-distance null scale from 20 independent pairs of exact
+   sample sets (4000 samples each), including the 95% quantile.
+7. Plot energy distance with the null-scale band, maximum cluster population
+   error, and maximum cluster width error versus sampling steps.
+8. Verify Flow Matching at 20 steps has energy distance `< 0.005` and maximum
+   width error `< 0.03`.
+9. Include exact-predictor DDIM at 1 and 2 steps to demonstrate coarse-grid
+   limitations.
+10. Save the figure in `evidence/`, raw metrics/samples in `artifacts/`, and
+    print a PASS/FAIL table.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -175,13 +207,14 @@ no clipping is applied.
   - Part 2 trajectory comparison, DDIM/DDPM/target sample comparison, exact
     predictor comparison, and PASS/FAIL log;
   - Part 3 learned/exact velocity-field figure, training-loss figure, and
-    PASS/FAIL log.
-- Raw checkpoints, losses, trajectories, samples, velocity grids, and
-  numerical results in `week7/artifacts/` (ignored by Git).
+    PASS/FAIL log;
+  - Part 3 VERIFY (2) sampling-step metrics figure and PASS/FAIL log.
+- Raw checkpoints, losses, trajectories, samples, velocity grids, sampling
+  metrics, and numerical results in `week7/artifacts/` (ignored by Git).
 
 ## Out of scope
 
-- Part 3 VERIFY (2) and later tasks.
+- Part 4 and later tasks.
 - CIFAR-10 diffusion or any high-dimensional image training.
 - Use or modification of the provided `week7/data/` resources.
 

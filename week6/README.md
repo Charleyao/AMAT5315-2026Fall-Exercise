@@ -498,6 +498,55 @@ Raw numerical data (all means, SEs and per-set values):
 `artifacts/hopfield_unstable_fraction.json` (gitignored). Run log:
 `evidence/hopfield-verify1-summary.txt`.
 
+## Part 3 — VERIFY (2): recall capacity
+
+`hopfield_recall.py` reuses the VERIFY (1) pattern sets (same seed **5315**
+and keys) and the asynchronous zero-temperature recall.
+
+- For each `(N, alpha)` point and each of the 20 pattern sets, recall starts
+  from the first `min(10, P)` stored patterns and runs until a full sweep
+  causes no flips.
+- Recorded per set: mean final overlap with the original pattern and the
+  recall success rate (`overlap >= 0.9`).
+- **Threshold crossing** is the alpha where the mean final overlap falls
+  through the same **0.9** level (linear interpolation); this is the
+  definition that reproduces the sheet references 0.186, 0.170, 0.156, 0.150.
+
+![Hopfield recall capacity](evidence/hopfield_recall_capacity.png)
+
+### VERIFY (2) results
+
+| N | estimated crossing | reference | difference | success at α=0.05 | success at α=0.25 |
+|---:|-------------------:|----------:|-----------:|------------------:|------------------:|
+| 100 | **0.1810** | 0.186 | 0.0050 | 1.000 | 0.315 |
+| 200 | **0.1729** | 0.170 | 0.0029 | 1.000 | 0.110 |
+| 400 | **0.1538** | 0.156 | 0.0022 | 1.000 | 0.025 |
+| 800 | **0.1485** | 0.150 | 0.0015 | 1.000 | 0.000 |
+
+Transition width (alpha at success 0.5 minus alpha at success 0.9):
+
+| N | width |
+|---:|---:|
+| 100 | 0.0728 |
+| 200 | 0.0624 |
+| 400 | 0.0372 |
+| 800 | 0.0260 |
+
+Near/above capacity (`alpha = 0.20`): mean overlap 0.847/0.810/0.613/0.424
+and success 0.610/0.545/0.290/0.075 for N = 100/200/400/800.
+
+Verification status:
+
+- ✅ Recall is essentially perfect at low alpha (success = 1.000 at α = 0.05).
+- ✅ Final overlap and success decrease near the storage capacity.
+- ✅ The transition becomes **sharper as N increases** (width 0.0728 → 0.0260).
+- ✅ Estimated crossings **decrease with N** (0.1810 → 0.1485).
+- ✅ Each crossing differs from its reference by **< 0.02** (max 0.0050).
+- ✅ `alpha_c = 0.138` is marked on both panels.
+
+Raw data: `artifacts/hopfield_recall_capacity.json` (means, SEs, per-set
+values, crossings; gitignored). Run log: `evidence/hopfield-recall-summary.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -512,7 +561,8 @@ uv run python cd_training.py                   # Part 2 VERIFY (2): CD-1 vs CD-1
 uv run python verify3_sampling.py              # Part 2 VERIFY (3): frozen sampling
 uv run python verify4_completion.py            # Part 2 VERIFY (4): completion
 uv run python hopfield_experiment.py           # Part 3 VERIFY (1): alpha sweep
-uv run python -m pytest -q                     # 105 tests
+uv run python hopfield_recall.py               # Part 3 VERIFY (2): capacity
+uv run python -m pytest -q                     # 112 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -529,5 +579,5 @@ after the checksum matches.
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
-  RBM and VERIFY (1)–(4), and Part 3 VERIFY (1) Hopfield network. Part 3
-  VERIFY (2) and Part 4 are not implemented yet.
+  RBM and VERIFY (1)–(4), and Part 3 VERIFY (1)–(2) Hopfield network. Part 4
+  is not implemented yet.

@@ -23,6 +23,7 @@ Usage::
 from __future__ import annotations
 
 import math
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -120,3 +121,54 @@ def pattern_overlap(spins: jax.Array, pattern: jax.Array) -> float:
     spins = np.asarray(spins)
     pattern = np.asarray(pattern)
     return float(np.mean(spins * pattern))
+
+
+@partial(jax.jit, static_argnames=("max_sweeps",))
+def async_recall_batch(
+    J: jax.Array, spins: jax.Array, key: jax.Array, max_sweeps: int = 1000
+):
+    """Run independent async recalls in parallel (one per row of ``spins``).
+
+    ``spins`` has shape ``(B, N)``; each row is evolved with its own random
+    single-spin order until a full sweep makes no flips (or ``max_sweeps``).
+    Returns ``(final_spins, sweeps, converged)``.
+    """
+    J = jnp.asarray(J, dtype=jnp.float32)
+    S = jnp.asarray(spins, dtype=jnp.float32)
+    n_chains, n_spins = S.shape
+    rows = jnp.arange(n_chains)
+    base_keys = jax.random.split(key, n_chains)
+
+    def sweep(state):
+        S, sweep_count, _changed = state
+        permutation_keys = jax.vmap(
+            lambda chain_key: jax.random.fold_in(chain_key, sweep_count)
+        )(base_keys)
+        orders = jax.vmap(
+            lambda permutation_key: jax.random.permutation(permutation_key, n_spins)
+        )(permutation_keys)
+
+        def update(carry, step):
+            S, changed = carry
+            index = orders[:, step]
+            fields = jnp.sum(J[index] * S, axis=1)
+            previous = S[rows, index]
+            updated = jnp.where(fields == 0.0, previous, jnp.sign(fields))
+            S = S.at[rows, index].set(updated)
+            return (S, jnp.logical_or(changed, updated != previous)), None
+
+        (S, changed), _ = jax.lax.scan(
+            update, (S, jnp.zeros(n_chains, dtype=jnp.bool_)), jnp.arange(n_spins)
+        )
+        return S, sweep_count + 1, changed
+
+    def condition(state):
+        _S, sweep_count, changed = state
+        return jnp.logical_and(
+            sweep_count < max_sweeps,
+            jnp.logical_or(sweep_count == 0, changed.any()),
+        )
+
+    initial = (S, jnp.array(0), jnp.ones(n_chains, dtype=jnp.bool_))
+    final, sweeps, changed = jax.lax.while_loop(condition, sweep, initial)
+    return final, sweeps, jnp.logical_not(changed.any())

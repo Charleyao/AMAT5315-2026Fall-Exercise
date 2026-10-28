@@ -29,13 +29,14 @@ def save_repaint_figure(
     mask = np.asarray(mask, dtype=np.float32)
     hidden = 1.0 - mask
     num_images, num_completions = completions.shape[:2]
+    mean_completions = completions.mean(axis=1)
     variance_map = variance.mean(axis=-1)
     vmax = max(float(variance_map.max()), 1e-12)
 
     figure, axes = plt.subplots(
         num_images,
-        2 + num_completions + 1,
-        figsize=((2 + num_completions + 1) * 1.9, num_images * 2.15),
+        2 + num_completions + 2,
+        figsize=((2 + num_completions + 2) * 1.9, num_images * 2.15),
         layout="constrained",
     )
     axes = np.atleast_2d(axes)
@@ -46,6 +47,8 @@ def save_repaint_figure(
         for completion_index in range(num_completions):
             panel_images.append(completions[row, completion_index])
             panel_titles.append(f"seed {seeds[completion_index]}")
+        panel_images.append(mean_completions[row])
+        panel_titles.append("mean completion")
         for column, (image, title) in enumerate(zip(panel_images, panel_titles)):
             axis = axes[row, column]
             axis.imshow(image, interpolation="nearest", vmin=0.0, vmax=1.0)

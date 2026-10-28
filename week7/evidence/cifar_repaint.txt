@@ -7,22 +7,26 @@ levels: 1000 -> ... -> 20 -> 0
 jumps: 50, expected network evaluations: 99
 seeds per image: (7201, 7202, 7203, 7204)
 running batched RePaint ...
+auditing hidden-ground-truth conditioning ...
 
 Hidden-pixel MSE per completion:
 image | seed 7201 | seed 7202 | seed 7203 | seed 7204
-    0 | 0.105911 | 0.110246 | 0.098663 | 0.105096
-    1 | 0.192275 | 0.176569 | 0.180236 | 0.200002
-    2 | 0.069891 | 0.088415 | 0.060007 | 0.078262
-    3 | 0.117485 | 0.126996 | 0.107392 | 0.123828
+    0 | 0.114809 | 0.193204 | 0.138478 | 0.162713
+    1 | 0.181609 | 0.258023 | 0.261519 | 0.267647
+    2 | 0.141976 | 0.177185 | 0.108975 | 0.110387
+    3 | 0.174588 | 0.115851 | 0.239892 | 0.259371
 
 VERIFY (1) checks
   completion shape (4, 4, 32, 32, 3): PASS
   finite completions: PASS
   network evaluations = 99 (expected 99): PASS
   max observed-pixel change = 0.000e+00 (< 1e-5): PASS
-  max hidden-pixel std = 0.744964; max pairwise hidden difference = 1.886414: PASS
-  cross-image hidden mean abs difference = 0.421430 (> 0.01): PASS
+  max hidden-pixel std = 0.589320; max pairwise hidden difference = 1.398010: PASS
+  cross-image hidden mean abs difference = 0.431139 (> 0.01): PASS
   completions within [-1,1]: PASS
+  hidden ground truth not used for conditioning: PASS (max completion difference 0.000e+00)
+  ship hidden MSE mean = 0.188415 (learning-sheet reference approx. 0.24)
+  ship mean-completion hidden MSE = 0.136830
 Part 5 VERIFY (1): PASS
 figure: evidence/cifar_repaint_completions.png
 results: artifacts/cifar_repaint_results.json

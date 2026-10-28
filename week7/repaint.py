@@ -40,6 +40,94 @@ def repaint_network_evaluations() -> int:
     """Two attempts per jump except the final jump: 99 evaluations."""
     return sum(1 if previous == 0 else 2 for _, previous in repaint_jumps())
 
+def model_timestep(level: int) -> int:
+    """Convert a 1-indexed schedule level to the model's 0-indexed timestep."""
+    return int(level) - 1
+
+
+def predict_clean_image(
+    x_t: jax.Array,
+    alpha_bar_t: jax.Array | float,
+    predicted_noise: jax.Array,
+) -> jax.Array:
+    """Predict x0 and clip only the clean estimate to [-1,1]."""
+    alpha_bar_t = jnp.asarray(alpha_bar_t, dtype=DTYPE)
+    predicted_x0 = (
+        x_t - jnp.sqrt(1.0 - alpha_bar_t) * predicted_noise
+    ) / jnp.sqrt(alpha_bar_t)
+    return jnp.clip(predicted_x0, -1.0, 1.0)
+
+
+def jump_posterior_terms(
+    alpha_bar_t: jax.Array | float,
+    alpha_bar_previous: jax.Array | float,
+) -> tuple[jax.Array, jax.Array]:
+    """Return (jump variance, coefficient of predicted noise)."""
+    alpha_bar_t = jnp.asarray(alpha_bar_t, dtype=DTYPE)
+    alpha_bar_previous = jnp.asarray(alpha_bar_previous, dtype=DTYPE)
+    jump_beta = 1.0 - alpha_bar_t / alpha_bar_previous
+    jump_variance = (
+        (1.0 - alpha_bar_previous)
+        / (1.0 - alpha_bar_t)
+        * jump_beta
+    )
+    noise_coefficient = jnp.sqrt(
+        jnp.maximum(1.0 - alpha_bar_previous - jump_variance, 0.0)
+    )
+    return jump_variance, noise_coefficient
+
+
+def posterior_jump(
+    x_t: jax.Array,
+    alpha_bar_t: jax.Array | float,
+    alpha_bar_previous: jax.Array | float,
+    predicted_noise: jax.Array,
+    reverse_noise: jax.Array,
+) -> tuple[jax.Array, jax.Array]:
+    """One clipped-x0 DDPM posterior reverse jump, with square roots."""
+    alpha_bar_t = jnp.asarray(alpha_bar_t, dtype=DTYPE)
+    alpha_bar_previous = jnp.asarray(alpha_bar_previous, dtype=DTYPE)
+    predicted_x0 = predict_clean_image(
+        x_t, alpha_bar_t, predicted_noise
+    )
+    jump_variance, noise_coefficient = jump_posterior_terms(
+        alpha_bar_t, alpha_bar_previous
+    )
+    x_previous = (
+        jnp.sqrt(alpha_bar_previous) * predicted_x0
+        + noise_coefficient * predicted_noise
+        + jnp.sqrt(jump_variance) * reverse_noise
+    )
+    return x_previous, predicted_x0
+
+
+def forward_renoise_step(
+    x_t: jax.Array, beta: jax.Array | float, noise: jax.Array
+) -> jax.Array:
+    """One forward diffusion step used by RePaint's undo_step."""
+    beta = jnp.asarray(beta, dtype=DTYPE)
+    return jnp.sqrt(1.0 - beta) * x_t + jnp.sqrt(beta) * noise
+
+
+def known_observation(
+    observation: jax.Array,
+    alpha_bar_t: jax.Array | float,
+    noise: jax.Array,
+) -> jax.Array:
+    """Forward-noised observed pixels at noise level t."""
+    alpha_bar_t = jnp.asarray(alpha_bar_t, dtype=DTYPE)
+    return (
+        jnp.sqrt(alpha_bar_t) * observation
+        + jnp.sqrt(1.0 - alpha_bar_t) * noise
+    )
+
+
+def merge_mask(
+    known: jax.Array, unknown: jax.Array, mask: jax.Array
+) -> jax.Array:
+    """Merge known (mask=1) and unknown (mask=0) pixels."""
+    return mask * known + (1.0 - mask) * unknown
+
 
 def load_test_images(path: str | Path = IMAGES_PATH) -> tuple[np.ndarray, np.ndarray]:
     """Load the four CIFAR-10 test images as NHWC float32 and their labels."""
@@ -99,11 +187,11 @@ def repaint_batch(
     noise = _noise_factory(key_noise, (32, 32, 3))
     # Seed the known border with its t=1000 forward observation before the
     # first network evaluation.
-    initial_known_noise = noise(0)
-    x = mask * (
-        jnp.sqrt(alpha_bars[1000]) * observations
-        + jnp.sqrt(1.0 - alpha_bars[1000]) * initial_known_noise
-    ) + (1.0 - mask) * x
+    initial_known_noise = noise(900000)
+    initial_known = known_observation(
+        observations, alpha_bars[1000], initial_known_noise
+    )
+    x = merge_mask(initial_known, x, mask)
     model = jax.jit(lambda sample, t: unet_apply(params, sample, t, config))
 
     evaluations = 0
@@ -111,53 +199,42 @@ def repaint_batch(
         attempts = 1 if previous_t == 0 else 2
         for attempt in range(attempts):
             if attempt > 0:
-                forward_noise = noise(step * 16 + attempt * 4)
-                x = (
-                    jnp.sqrt(alpha_bars[t]) * x
-                    + jnp.sqrt(1.0 - alpha_bars[t]) * forward_noise
-                )
-                known_at_t = (
-                    jnp.sqrt(alpha_bars[t]) * observations
-                    + jnp.sqrt(1.0 - alpha_bars[t]) * forward_noise
-                )
-                x = mask * known_at_t + (1.0 - mask) * x
+                # Match RePaintScheduler.undo_step: walk forward through the
+                # skipped levels with independent noise. The known pixels at
+                # previous_t were already forward-noised observations, so this
+                # carries the border back to level t without hidden-GT access.
+                for forward_level in range(previous_t, t):
+                    forward_noise = noise(
+                        step * 1000 + attempt * 100 + forward_level
+                    )
+                    x = forward_renoise_step(
+                        x, betas[forward_level], forward_noise
+                    )
 
-            predicted_noise = model(x, t - 1)
+            predicted_noise = model(x, model_timestep(t))
             evaluations += 1
 
             # RePaint Algorithm 6 predicts and clips the clean image, then
             # takes the DDPM posterior reverse jump.
-            predicted_x0 = (
-                x - jnp.sqrt(1.0 - alpha_bars[t]) * predicted_noise
-            ) / jnp.sqrt(alpha_bars[t])
-            predicted_x0 = jnp.clip(predicted_x0, -1.0, 1.0)
-            jump_beta = 1.0 - alpha_bars[t] / alpha_bars[previous_t]
-            jump_variance = (
-                (1.0 - alpha_bars[previous_t])
-                / (1.0 - alpha_bars[t])
-                * jump_beta
-            )
-            reverse_noise = noise(step * 16 + attempt * 4 + 1)
-            unknown_previous = (
-                jnp.sqrt(alpha_bars[previous_t]) * predicted_x0
-                + jnp.sqrt(
-                    jnp.maximum(
-                        1.0 - alpha_bars[previous_t] - jump_variance, 0.0
-                    )
-                )
-                * predicted_noise
-                + jnp.sqrt(jump_variance) * reverse_noise
+            reverse_noise = noise(600000 + step * 10 + attempt)
+            unknown_previous, _ = posterior_jump(
+                x,
+                alpha_bars[t],
+                alpha_bars[previous_t],
+                predicted_noise,
+                reverse_noise,
             )
 
             if previous_t > 0:
-                known_noise = noise(step * 16 + attempt * 4 + 2)
-                known_at_previous = (
-                    jnp.sqrt(alpha_bars[previous_t]) * observations
-                    + jnp.sqrt(1.0 - alpha_bars[previous_t]) * known_noise
+                known_noise = noise(700000 + step * 10 + attempt)
+                known_at_previous = known_observation(
+                    observations, alpha_bars[previous_t], known_noise
                 )
-                x = mask * known_at_previous + (1.0 - mask) * unknown_previous
+                x = merge_mask(
+                    known_at_previous, unknown_previous, mask
+                )
             else:
-                x = mask * observations + (1.0 - mask) * unknown_previous
+                x = merge_mask(observations, unknown_previous, mask)
 
     return np.asarray(x, dtype=np.float32), {
         "network_evaluations": evaluations,
@@ -187,8 +264,24 @@ def repaint_metrics(
 
     hidden_bool = np.broadcast_to(hidden > 0.5, completions.shape[2:])
     observed_bool = ~hidden_bool
-    hidden_mse = np.mean(
-        (completions - originals[:, None, :, :, :]) ** 2, axis=(2, 3, 4)
+    difference_squared = (
+        completions - originals[:, None, :, :, :]
+    ) ** 2
+    hidden_mse = np.asarray(
+        [
+            [
+                np.mean(difference_squared[image, seed][hidden_bool])
+                for seed in range(completions.shape[1])
+            ]
+            for image in range(completions.shape[0])
+        ]
+    )
+    mean_completion = np.mean(completions, axis=1)
+    mean_completion_mse = np.asarray(
+        [
+            np.mean((mean_completion[image][hidden_bool] - originals[image][hidden_bool]) ** 2)
+            for image in range(completions.shape[0])
+        ]
     )
     observed_change = np.max(
         np.abs(completions - originals[:, None, :, :, :])[:, :, observed_bool],
@@ -227,6 +320,8 @@ def repaint_metrics(
         "hidden_mse": hidden_mse.tolist(),
         "per_image_hidden_mse_max": np.max(hidden_mse, axis=1).tolist(),
         "per_image_hidden_mse_mean": np.mean(hidden_mse, axis=1).tolist(),
+        "mean_completion": mean_completion,
+        "mean_completion_hidden_mse": mean_completion_mse.tolist(),
         "observed_max_change": float(observed_change.max()),
         "observed_max_change_per_completion": (
             observed_change_per_completion.tolist()
@@ -238,8 +333,10 @@ def repaint_metrics(
         "per_image_max_hidden_std": max_hidden_std.tolist(),
         "per_image_min_hidden_std": min_hidden_std.tolist(),
         "max_pairwise_hidden_difference": float(pairwise_difference.max()),
-        "cross_image_hidden_mean_abs_difference": float(
-            np.mean(cross_image_differences)
+        "cross_image_hidden_mean_abs_difference": (
+            float(np.mean(cross_image_differences))
+            if cross_image_differences
+            else 0.0
         ),
         "variance": variance,
         "completions_in_range": bool(

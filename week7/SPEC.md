@@ -231,14 +231,18 @@ no clipping is applied.
    - use 50 reverse jumps `1000, 980, ..., 20, 0`;
    - use two attempts per jump except the final jump, for exactly 99 network
      evaluations;
-   - forward-noise between attempts and replace known pixels with
-     forward-noised observations;
-   - clip only the predicted clean image `x0` to `[-1,1]`.
+   - forward-noise between attempts with sequential beta `undo_step` noise and
+     replace known pixels with forward-noised observations at the correct
+     level;
+   - predict and clip only the clean image `x0` to `[-1,1]`, with 0-indexed
+     model timestep `t-1`.
 3. Generate four completions for each of the four images using seeds `7201`,
    `7202`, `7203`, `7204`.
 4. Show original, masked image, four completions, and pixelwise variance.
-5. Report hidden-pixel MSE for every completion, verify maximum observed-pixel
-   change `< 1e-5`, and confirm completions differ inside the masked region.
+5. Report hidden-pixel MSE over the hidden pixels only for every completion,
+   verify maximum observed-pixel change `< 1e-5`, confirm completions differ
+   inside the masked region, and audit that hidden ground truth is never used
+   for conditioning.
 6. Save figures in `evidence/`, raw results in `artifacts/`, and print a
    PASS/FAIL table.
 

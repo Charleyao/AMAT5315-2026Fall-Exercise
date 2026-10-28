@@ -79,6 +79,27 @@ def main() -> int:
     )
     metrics = repaint_metrics(completions, images, mask)
 
+    # Causality audit: changing hidden ground truth while keeping the visible
+    # border identical must not change the completion.
+    print("auditing hidden-ground-truth conditioning ...", flush=True)
+    hidden = np.broadcast_to((1.0 - mask) > 0.5, (32, 32, 3))
+    audit_original = images[1:2].copy()
+    audit_modified = audit_original.copy()
+    audit_rng = np.random.default_rng(123)
+    audit_modified[:, hidden] = audit_rng.uniform(
+        -1.0, 1.0, size=audit_modified[:, hidden].shape
+    ).astype(np.float32)
+    audit_a, audit_metadata_a = repaint_batch(
+        params, config, audit_original, (SEEDS[0],)
+    )
+    audit_b, audit_metadata_b = repaint_batch(
+        params, config, audit_modified, (SEEDS[0],)
+    )
+    hidden_gt_max_difference = float(
+        np.max(np.abs(audit_a - audit_b))
+    )
+    hidden_gt_ok = bool(hidden_gt_max_difference < 1e-7)
+
     shape_ok = completions.shape == (4, 4, 32, 32, 3)
     finite_ok = bool(np.isfinite(completions).all())
     evaluations_ok = (
@@ -103,6 +124,7 @@ def main() -> int:
         and differ_ok
         and context_ok
         and clipping_ok
+        and hidden_gt_ok
     )
 
     figure_path = EVIDENCE_DIR / "cifar_repaint_completions.png"
@@ -141,6 +163,9 @@ def main() -> int:
                 "expected_network_evaluations"
             ],
             "forward_noise_between_attempts": True,
+            "forward_noise_method": (
+                "sequential beta forward steps (RePaintScheduler.undo_step)"
+            ),
             "known_pixel_replacement": "forward-noised observations",
             "reverse_step": "DDPM posterior jump with clipped predicted x0",
             "model_timestep": "t-1",
@@ -148,11 +173,18 @@ def main() -> int:
             "seeds_per_image": list(SEEDS),
         },
         "checks": {
+            "ship_mean_hidden_mse": float(
+                np.mean(np.asarray(metrics["hidden_mse"])[1:3])
+            ),
+            "reference_ship_mean_hidden_mse": 0.24,
             "completion_shape": list(completions.shape),
             "shape_ok": shape_ok,
             "finite_ok": finite_ok,
             "network_evaluations_ok": evaluations_ok,
             "hidden_mse_per_completion": metrics["hidden_mse"],
+            "mean_completion_hidden_mse": metrics[
+                "mean_completion_hidden_mse"
+            ],
             "observed_max_change": metrics["observed_max_change"],
             "observed_max_change_per_completion": metrics[
                 "observed_max_change_per_completion"
@@ -169,6 +201,12 @@ def main() -> int:
             ],
             "context_response_above_0_01": context_ok,
             "completions_in_range_minus1_plus1": clipping_ok,
+            "hidden_gt_max_completion_difference": hidden_gt_max_difference,
+            "hidden_gt_not_used_for_conditioning": hidden_gt_ok,
+            "hidden_gt_audit_network_evaluations": (
+                audit_metadata_a["network_evaluations"]
+                + audit_metadata_b["network_evaluations"]
+            ),
             "overall_pass": overall_pass,
         },
         "evidence": {
@@ -190,7 +228,11 @@ def main() -> int:
         mask=mask,
         completions=completions,
         variance=metrics["variance"],
+        mean_completions=np.asarray(metrics["mean_completion"]),
         hidden_mse=np.asarray(metrics["hidden_mse"]),
+        mean_completion_hidden_mse=np.asarray(
+            metrics["mean_completion_hidden_mse"]
+        ),
         observed_max_change=np.asarray(
             metrics["observed_max_change_per_completion"]
         ),
@@ -232,6 +274,25 @@ def main() -> int:
     print(
         f"  completions within [-1,1]: "
         f"{'PASS' if clipping_ok else 'FAIL'}"
+    )
+    print(
+        "  hidden ground truth not used for conditioning: "
+        f"{'PASS' if hidden_gt_ok else 'FAIL'} "
+        f"(max completion difference {hidden_gt_max_difference:.3e})"
+    )
+    ship_mse = np.mean(
+        np.asarray(metrics["hidden_mse"])[1:3]
+    )
+    print(
+        f"  ship hidden MSE mean = {ship_mse:.6f} "
+        f"(learning-sheet reference approx. 0.24)"
+    )
+    mean_completion_ship_mse = np.mean(
+        np.asarray(metrics["mean_completion_hidden_mse"])[1:3]
+    )
+    print(
+        f"  ship mean-completion hidden MSE = "
+        f"{mean_completion_ship_mse:.6f}"
     )
     print(f"Part 5 VERIFY (1): {'PASS' if overall_pass else 'FAIL'}")
     print(f"figure: {figure_path.relative_to(WEEK_DIR)}")

@@ -308,19 +308,29 @@ gallery in the Week 7 evidence folder.
 RePaint uses the frozen pretrained CIFAR-10 U-Net, the four `inputs/images.npz`
 test images, and the hidden region rows/columns `6:26` in all RGB channels. The
 50 reverse jumps are `1000, 980, ..., 20, 0`; every jump except the final one
-uses two attempts, for exactly **99 network evaluations**. Between attempts the
-current sample is forward-noised and known pixels are replaced with
-forward-noised observations. Only the predicted clean image `x0` is clipped to
-`[-1,1]`; noisy intermediates are not clipped.
+uses two attempts, for exactly **99 network evaluations**.
 
-Each image was completed with seeds `7201, 7202, 7203, 7204`.
+The audited update now matches the RePaint scheduler order:
+
+1. Between attempts, walk forward through every skipped beta with independent
+   noise (`RePaintScheduler.undo_step`), not a one-shot marginal re-noise.
+2. Merge known pixels from forward-noised observations at the correct previous
+   noise level.
+3. Predict and clip only the clean image `x0` to `[-1,1]`.
+4. Take the DDPM posterior jump with the correct square-root mean/variance
+   terms and 0-indexed model timestep `t-1`.
+
+Each image was completed with seeds `7201, 7202, 7203, 7204`. A hidden-ground-
+truth causality audit reruns the ship with its hidden content replaced while
+keeping the visible border identical; the completion difference is
+`0.000e+00`, confirming hidden ground truth is never used for conditioning.
 
 | Image | hidden MSE (seeds 7201–7204) |
 |---:|---|
-| 0 (cat) | `0.105911`, `0.110246`, `0.098663`, `0.105096` |
-| 1 (ship) | `0.192275`, `0.176569`, `0.180236`, `0.200002` |
-| 2 (ship) | `0.069891`, `0.088415`, `0.060007`, `0.078262` |
-| 3 (airplane) | `0.117485`, `0.126996`, `0.107392`, `0.123828` |
+| 0 (cat) | `0.114809`, `0.193204`, `0.138478`, `0.162713` |
+| 1 (ship) | `0.181609`, `0.258023`, `0.261519`, `0.267647` |
+| 2 (ship) | `0.141976`, `0.177185`, `0.108975`, `0.110387` |
+| 3 (airplane) | `0.174588`, `0.115851`, `0.239892`, `0.259371` |
 
 | Check | Value | Result |
 |-------|-------|:------:|
@@ -328,19 +338,24 @@ Each image was completed with seeds `7201, 7202, 7203, 7204`.
 | Finite completions | all finite | PASS |
 | Network evaluations | `99` | PASS |
 | Maximum observed-pixel change | `0.000e+00` (`< 1e-5`) | PASS |
-| Completions differ inside mask | max hidden std `0.744964`; max pairwise diff `1.886414` | PASS |
-| Cross-image context response | mean hidden difference `0.421430` (`> 0.01`) | PASS |
+| Completions differ inside mask | max hidden std `0.589320`; max pairwise diff `1.398010` | PASS |
+| Cross-image context response | mean hidden difference `0.431139` (`> 0.01`) | PASS |
 | Completion range | within `[-1,1]` | PASS |
+| Hidden ground truth unused | max difference `0.000e+00` | PASS |
 
-The same completion seed now receives independent noise for each input image, so
-completions no longer collapse to the same hidden texture; the cross-image
-mean absolute hidden difference is `0.421430`. The four contexts are visibly
-different (cat, two ships, airplane), and the completion colors follow the
-visible border. With the mandated 99 network evaluations, the hidden interiors
-remain texture-noisy and are not photorealistic; this is reported as a
-limitation rather than claimed as clean visual inpainting.
+Figure 12 comparison:
 
-**Part 5 VERIFY (1): PASS.**
+- Our two-ship average hidden-pixel MSE: **`0.188415`**; the learning-sheet
+  reference is approximately **`0.24`**. The gap is reported rather than tuned
+  away; the reference may use a different normalization/mask definition.
+- Our ship **mean completion** hidden MSE across seeds: **`0.136830`**.
+- The visual comparison now shows coherent cat/ship/airplane structure and a
+  usable mean completion (included in the evidence figure). Residual blur
+  remains, but the earlier colorful-noise collapse is gone.
+
+**Part 5 VERIFY (1): PASS** for the numerical, causality, and conditioning
+checks. The reference MSE discrepancy and residual blur are documented
+limitations, not hidden.
 
 ## Evidence
 

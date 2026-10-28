@@ -1,0 +1,9 @@
+VERIFY (1) figures
+  first 16 labels (stored order): [5, 0, 4, 1, 9, 2, 1, 3, 1, 4, 3, 5, 3, 6, 1, 7]
+  binary pixels per image:        784
+  spin values:                    [-1, 1]
+  max visible-visible links:      0
+  max hidden-hidden links:        0
+  saved binary_gallery: evidence/mnist_binary_gallery.png
+  saved spin_configuration: evidence/mnist_spin_configuration.png
+  saved architecture: evidence/rbm_architecture.png

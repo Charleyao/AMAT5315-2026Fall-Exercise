@@ -1,0 +1,39 @@
+# Week 6 Part 2 — basic Restricted Boltzmann Machine on MNIST.
+# Settings transcribed from the Week 6 learning sheet (Part 2).
+
+[training]
+images = 60000
+epochs = 20
+batch_size = 100
+shuffle_each_epoch = true
+optimizer = "SGD"
+learning_rate = 0.1
+momentum = 0.0
+weight_decay = 0.0
+precision = "float32"
+seed = 6602
+
+[initialization]
+weight_std = 0.01
+hidden_bias = 0.0
+visible_bias = "logit(clipped_training_pixel_frequency)"
+pixel_frequency_clip = [0.01, 0.99]
+seed = 6601
+
+[evaluation]
+test_images = 64
+seed = 6606
+reconstruction_at = ["initialization", "each_epoch"]
+surrogate = "epoch_mean_of_batch_surrogates_before_updates"
+
+[completion]
+test_images = 64
+chains = 8
+steps = [1, 10, 100, 1000]
+seed = 6607
+wrong_upper = "next_evaluation_image_with_a_different_label_wrapping_within_64"
+
+[model]
+# 28 x 28 = 784 visible binary units; 128 hidden binary units.
+visible_units = 784
+hidden_units = 128

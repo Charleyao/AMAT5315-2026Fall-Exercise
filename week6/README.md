@@ -207,16 +207,101 @@ Verified properties:
   consistency. The gallery cannot show class proportions, and the bar chart
   cannot show image content — together they characterize the dataset.
 
+## Part 2 — basic RBM and VERIFY (1)
+
+### Reproducible JAX CPU environment (uv)
+
+The environment is pinned in `pyproject.toml`, locked in `uv.lock`, and uses
+**Python 3.14** (`.python-version`). JAX `0.12.0.1` provides CPU wheels for
+Python 3.14, so the system interpreter is compatible and no alternative
+Python version is needed; Week 5's environment is untouched.
+
+```sh
+cd week6
+uv sync        # creates .venv from the lock file
+uv run python -c "import jax; print(jax.__version__, jax.devices())"
+```
+
+Verified: `jax 0.12.0.1`, `jaxlib 0.12.0.1`, device `CpuDevice`, float32
+default; array/matmul/sigmoid/Bernoulli operations run correctly.
+
+Pinned packages: `jax==0.12.0.1`, `jaxlib==0.12.0.1`, `numpy==2.5.4`,
+`matplotlib==3.11.2`, `pytest==9.2.0`.
+
+### Configuration (`rbm.toml`)
+
+Settings transcribed from the learning sheet:
+
+| Section | Values |
+|---------|--------|
+| training | 60,000 images, 20 epochs, batch 100, shuffle each epoch, SGD, lr 0.1, momentum 0.0, weight decay 0.0, float32, seed 6602 |
+| initialization | weight std 0.01, hidden bias 0.0, visible bias = logit of clipped training pixel frequency, clip [0.01, 0.99], seed 6601 |
+| evaluation | 64 test images, seed 6606, reconstruction at initialization and each epoch, surrogate = epoch mean of batch surrogates before updates |
+| completion | 64 test images, 8 chains, steps [1, 10, 100, 1000], seed 6607, wrong-upper = next evaluation image with a different label (wrapping in the 64) |
+| model | 784 visible binary units, 128 hidden binary units |
+
+### RBM implementation (`rbm.py`)
+
+- `binarize`: `v = 1` if pixel >= 128 else `0`; `to_spins`: `s = 2v - 1`.
+- `RBM(W, a, b)` with `W` shape `(784, 128)`, `a` shape `(784,)`, `b` shape `(128,)`.
+- `energy(params, v, h) = -a·v - b·h - vᵀWh`.
+- `free_energy(params, v) = -a·v - Σ softplus(b + vᵀW)`.
+- `hidden_prob`, `visible_prob` (sigmoid conditionals).
+- `sample_bernoulli`, `gibbs_step` (hidden block then visible block),
+  `gibbs_chain`.
+- Initialization uses seed 6601; `a` is the logit of the clipped training
+  pixel frequency.
+
+No contrastive-divergence training (CD-1/CD-10) is implemented in this step.
+
+### VERIFY (1) figures
+
+| Figure | File | Content |
+|--------|------|---------|
+| A | `evidence/mnist_binary_gallery.png` | first 16 training images, stored order, binarized |
+| B | `evidence/mnist_spin_configuration.png` | one enlarged 28×28 spin state, white +1 ink / black −1 background |
+| C | `evidence/rbm_architecture.png` | 784 visible ↔ 128 hidden bipartite graph, no within-layer couplings |
+
+![First 16 binarized MNIST training images](evidence/mnist_binary_gallery.png)
+
+![MNIST spin configuration](evidence/mnist_spin_configuration.png)
+
+![RBM architecture](evidence/rbm_architecture.png)
+
+Reproduce with:
+
+```sh
+cd week6
+uv run python rbm.py            # parse config, initialize, finite-value checks
+uv run python verify1_figures.py  # writes the three figures to evidence/
+uv run python -m pytest -q        # 65 tests
+```
+
+### VERIFY (1) results
+
+- First 16 training labels in stored order:
+  `[5, 0, 4, 1, 9, 2, 1, 3, 1, 4, 3, 5, 3, 6, 1, 7]` (matches the raw IDX files).
+- Each image has exactly **784** visible binary units; values are `{0, 1}`.
+- Spin values are strictly `{-1, +1}`; image 0 has both ink (+1) and
+  background (−1).
+- Weight matrix shape is **(784, 128)**; biases are `(784,)` and `(128,)`.
+- Energy, free energy, conditional probabilities and Gibbs sampling all
+  return finite values; energy/free-energy match brute-force enumeration on a
+  small RBM.
+- Architecture diagram has connections only between layers (70 representative
+  visible-hidden lines for 10×7 drawn nodes) and none within a layer.
+
 ## How to reproduce
 
 ```sh
 cd week6
-python3 -m venv .venv
-.venv/bin/python -m pip install numpy matplotlib pytest
-.venv/bin/python prepare_data.py                # download + checksum + parse
-.venv/bin/python plot_mnist_distribution.py     # VERIFY (1) figure
-.venv/bin/python plot_cifar10_distribution.py   # VERIFY (2) figure
-.venv/bin/python -m pytest -q                   # 38 tests
+uv sync                                        # JAX CPU environment (Python 3.14)
+uv run python prepare_data.py                  # download + checksum + parse
+uv run python plot_mnist_distribution.py       # Part 1 VERIFY (1) figure
+uv run python plot_cifar10_distribution.py     # Part 1 VERIFY (2) figure
+uv run python rbm.py                           # RBM basics + finite checks
+uv run python verify1_figures.py               # Part 2 VERIFY (1) figures
+uv run python -m pytest -q                     # 65 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -232,5 +317,6 @@ after the checksum matches.
   `storage.googleapis.com`. `prepare_data.py` detects that and resolves the
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
-- Scope: Part 1 dataset preparation plus VERIFY (1) and VERIFY (2) only —
-  no model training and no Part 2.
+- Scope: Part 1 dataset preparation and distribution figures, plus Part 2
+  basic RBM and VERIFY (1). CD-1/CD-10 training, Part 2 VERIFY (2) and Part 3
+  are not implemented yet.

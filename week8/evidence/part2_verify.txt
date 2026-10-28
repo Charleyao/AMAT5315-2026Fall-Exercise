@@ -1,0 +1,98 @@
+AMAT5315 Week 8 Part 2 - count models: Markov chains and n-grams
+==============================================================================
+
+Dataset
+------------------------------------------------------------------------------
+  source: roneneldan/TinyStories @ f54c09fd23315a6f9c86f9dc80f725de7d8f9c64
+  file: TinyStoriesV2-GPT4-valid.txt
+  stories: 27630 total, 24867 train, 2763 validation
+  split: first 90% / last 10%, no shuffling
+  tokens: 9,667,035 train, 1,078,996 validation
+  characters: 19,853,989 train, 2,213,915 validation
+  exact split: True
+
+Tokenizer
+------------------------------------------------------------------------------
+  source: karpathy/tinyllamas @ 0bd21da, stories260K/tok512.model
+  vocabulary size: 512
+  EOS id: 2, UNK id: 0
+  EOS inserted after every story: train 24,867, validation 2,763
+  average characters/token: overall 2.053586, train 2.053783, validation 2.051829
+  round-trip: exact 27,556/27,630, after whitespace normalization 27,630/27,630
+  UNK tokens: train 0, validation 0
+  tokenizer checks: True
+
+Smoothing selection (last 10% of training tokens)
+------------------------------------------------------------------------------
+  n=1: selected k=0.0001 (selection nats/token 4.8362); grid [0.0001:4.8362, 0.001:4.8362, 0.01:4.8362, 0.1:4.8362, 1:4.8362]
+  n=2: selected k=0.01 (selection nats/token 3.0347); grid [0.0001:3.0359, 0.001:3.0352, 0.01:3.0347, 0.1:3.0351, 1:3.0440]
+  n=3: selected k=0.01 (selection nats/token 2.0918); grid [0.0001:2.1147, 0.001:2.1005, 0.01:2.0918, 0.1:2.1203, 1:2.3296]
+  n=4: selected k=0.01 (selection nats/token 1.8679); grid [0.0001:1.9719, 0.001:1.8958, 0.01:1.8679, 0.1:2.0359, 1:2.6817]
+  n=5: selected k=0.01 (selection nats/token 2.1001); grid [0.0001:2.2875, 0.001:2.1244, 0.01:2.1001, 0.1:2.4662, 1:3.4037]
+  n=6: selected k=0.001 (selection nats/token 2.5818); grid [0.0001:2.7974, 0.001:2.5818, 0.01:2.5883, 0.1:3.0880, 1:4.0945]
+
+Held-out metrics
+------------------------------------------------------------------------------
+  model             k   nats/token   perplexity   bits/char    unseen
+  uniform           -       6.2383     512.0000      4.3863    0.00%
+  n=1          0.0001       4.8394     126.3935      3.4027    0.00%
+  n=2            0.01       3.0382      20.8675      2.1362    0.03%
+  n=3            0.01       2.0943       8.1201      1.4726    0.63%
+  n=4            0.01       1.8627       6.4414      1.3097    4.15%
+  n=5            0.01       2.0825       8.0247      1.4643   12.22%
+  n=6           0.001       2.5504      12.8120      1.7932   23.50%
+
+VERIFY (1) - bigram normalization over all sequences of lengths 1, 2, 3
+------------------------------------------------------------------------------
+  sum(length_1) = 1.00000000000000000, error = 0.000e+00
+  sum(length_2) = 1.00000000000000000, error = 0.000e+00
+  sum(length_3) = 1.00000000000000000, error = 0.000e+00
+  maximum conditional row-sum error: 6.661e-16
+  maximum sequence-sum error: 0.000e+00 (limit 1e-12)
+  allocation: 262144 cells for length-3 contraction
+  initial token distribution: uniform over 512 tokens
+  VERIFY (1): PASS
+
+VERIFY (2) - held-out comparison with reference values
+------------------------------------------------------------------------------
+  model          nats      ref     diff       ppl      ref  rel.diff      bpc     ref  bpc diff status
+  uniform      6.2383    6.238  +0.0003   512.000  512.000     0.00%   4.3863   4.386   +0.0003 ok
+  unigram      4.8394    4.839  +0.0004   126.394  126.400     0.01%   3.4027   3.403   -0.0003 ok
+  bigram       3.0382    3.038  +0.0002    20.868   20.900     0.16%   2.1362   2.136   +0.0002 ok
+  trigram      2.0943    2.094  +0.0003     8.120    8.120     0.00%   1.4726   1.473   -0.0004 ok
+  split correct: True; tokenizer checks: True; perplexity within 3%: True
+  VERIFY (2): PASS
+
+VERIFY (3) - ancestral sampling from the bigram model
+------------------------------------------------------------------------------
+  sampled tokens: 250,000 (seed 1730); transitions after the 20 most frequent contexts: 96,776
+  top-context occurrences: min 2,951, max 10,417
+  pooled chi-squared: 1196.8639, dof: 1209, p-value: 0.592533
+  expected-count grouping: within each context, next-token categories with expected count < 5 pooled into one other category; all kept expected counts >= 5: True
+  acceptance p > 0.001: True
+  VERIFY (3): PASS
+
+VERIFY (4) - curse of dimensionality
+------------------------------------------------------------------------------
+   n  bits/char     ref      diff    unseen      ref  diff (pp) status
+   3     1.4726   1.473   -0.0004   0.633%    0.60%     +0.03 ok
+   4     1.3097   1.310   -0.0003   4.151%    4.20%     -0.05 ok
+   5     1.4643   1.460   +0.0043  12.224%   12.20%     +0.02 ok
+   6     1.7932   1.790   +0.0032  23.499%   23.50%     -0.00 ok
+  minimum held-out bits/char at n=4 (required: 4)
+  VERIFY (4): PASS
+
+Outputs
+------------------------------------------------------------------------------
+  figure 7: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure7_curse_of_dimensionality.png
+  verify 3 figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_verify3_bigram_chi2.png
+  results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part2_results.json
+  settings: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part2_settings.json
+  chi-square table: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part2_chi2_table.npz
+
+Summary
+------------------------------------------------------------------------------
+  VERIFY (1): PASS
+  VERIFY (2): PASS
+  VERIFY (3): PASS
+  VERIFY (4): PASS

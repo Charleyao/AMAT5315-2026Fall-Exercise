@@ -1,0 +1,6 @@
+# Downloaded model files and local environments stay out of Git.
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/

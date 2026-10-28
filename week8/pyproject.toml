@@ -1,0 +1,17 @@
+[project]
+name = "amat5315-week8"
+version = "0.1.0"
+description = "AMAT5315 Week 8: static word embeddings and relational offsets"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.10",
+    "numpy>=2.0",
+    "safetensors>=0.5",
+    "tokenizers>=0.21",
+    "pytest>=8.0",
+    "sentencepiece>=0.2.2",
+    "scipy>=1.18.1",
+    "jax>=0.12.0.1",
+    "jaxlib>=0.12.0.1",
+    "optax>=0.2.8",
+]

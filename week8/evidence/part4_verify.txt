@@ -1,0 +1,58 @@
+AMAT5315 Week 8 Part 4 - attention: a memory built from the text
+================================================================================
+
+Picture memory
+--------------------------------------------------------------------------------
+  character: 32x32 block letter A, 264 ink pixels (+1), background -1
+  note: learning-sheet glyph unavailable; documented substitution
+  keys: d=64, M in [64, 256, 1024, 4096], seed=1730 (draw seed = seed + M)
+  query: stored character key; normalize recalled vector by target weight
+  R = ||interference|| / ||signal||, signal = target_weight * target_value
+
+All 16 interference-to-signal ratios
+--------------------------------------------------------------------------------
+       M    Outer-product             ReLU           ReLU^2   Softmax beta=8
+      64           0.9766           0.6229           0.1325           0.0063
+     256           2.2451           1.6727           0.3895           0.0183
+    1024           4.1837           3.0111           0.6846           0.0329
+    4096           8.0405           5.7568           1.2240           0.0612
+
+Softmax reconstruction quality
+--------------------------------------------------------------------------------
+  M=   64: R=0.0063, cosine(normalized recall, target)=0.999980
+  M=  256: R=0.0183, cosine(normalized recall, target)=0.999833
+  M= 1024: R=0.0329, cosine(normalized recall, target)=0.999458
+  M= 4096: R=0.0612, cosine(normalized recall, target)=0.998128
+
+VERIFY (1) - comparison with reference behavior
+--------------------------------------------------------------------------------
+  M=1024 outer-product: R=4.1837, theory 4.0, relative error +4.59% (limit 15%)
+  M=1024 ReLU:          R=3.0111, theory 2.83, relative error +6.40% (limit 15%)
+  M=4096 measured vs reference:
+    Outer-product      R=8.0405, reference 7.940, relative error +1.27%
+    ReLU               R=5.7568, reference 5.820, relative error -1.09%
+    ReLU^2             R=1.2240, reference 1.230, relative error -0.49%
+    Softmax beta=8     R=0.0612, reference 0.057, relative error +7.37%
+  ReLU^2 R > 1 at M=4096: True
+  Softmax R < 0.1 at every M: True (max 0.0612)
+  Softmax clearly reconstructs image (cosine >= 0.95): True
+  Non-softmax R increases with M: True
+  outer_r_m1024_within_15_percent_of_4: True
+  relu_r_m1024_within_15_percent_of_2.83: True
+  relu_squared_r_gt_1_at_m4096: True
+  softmax_r_lt_0.1_at_every_m: True
+  softmax_reconstructs_image: True
+  non_softmax_r_increases_with_m: True
+  m4096_matches_references_within_15_percent: True
+  VERIFY (1): PASS
+
+Outputs
+--------------------------------------------------------------------------------
+  Figure 13: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure13_attention_recall.png
+  recall data: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part4_recall_data.npz
+  results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part4_results.json
+  settings: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part4_settings.json
+
+Summary
+--------------------------------------------------------------------------------
+  VERIFY (1): PASS

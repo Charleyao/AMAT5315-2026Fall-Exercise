@@ -1,0 +1,82 @@
+AMAT5315 Week 8 Part 3 - the MLP: a memory in the weights
+==================================================================================
+
+Memory experiment
+----------------------------------------------------------------------------------
+  R = ||interference|| / ||signal||; median over 3 independent draws; capacity at R=1
+
+  d=64 capacities and reference values
+  store                  capacity     expected   rel.error
+  Outer product            64.666       67.400      4.06%
+  Least squares           128.000      129.000      0.78%
+  ReLU (p=1)              128.386      128.000      0.30%
+  ReLU^2 (p=2)           2736.321     2871.000      4.69%
+  ReLU^3 (p=3)          39019.757    38124.000      2.35%
+
+  all dimensions
+  store                      d=16         d=32         d=64
+  Outer product            16.069       32.230       64.666
+  Least squares            32.000       64.000      128.000
+  ReLU (p=1)               32.904       63.512      128.386
+  ReLU^2 (p=2)            192.952      749.606     2736.321
+  ReLU^3 (p=3)            793.125     5160.257    39019.757
+
+VERIFY (1) - d=64 memory curves
+----------------------------------------------------------------------------------
+  outer-product capacity: 64.666 (required 50-85)
+  least-squares capacity: 128.000 (required 100-170)
+  least-squares max R for M<=64: 0.000e+00 (required < 1e-10)
+  ReLU^2 capacity: 2736.3 (reference 2871, rel.error 4.69%)
+  ReLU^3 capacity: 39019.8 (reference 38124, rel.error 2.35%)
+  local log-log growth slopes (expected ~0.5): Outer product=0.542, Least squares=0.585, ReLU (p=1)=0.499, ReLU^2 (p=2)=0.501, ReLU^3 (p=3)=0.496
+  outer_capacity_in_range: True
+  least_squares_capacity_in_range: True
+  least_squares_r_below_1e-10_for_m_le_64: True
+  relu_p2_capacity_within_10_percent: True
+  relu_p3_capacity_within_10_percent: True
+  curves_show_sqrt_growth: True
+  VERIFY (1): PASS
+
+VERIFY (2) - capacity scaling with dimension
+----------------------------------------------------------------------------------
+  store                 slope   expected check
+  Outer product         1.004       0.96 within 0.1 of 1
+  Least squares         1.000       0.99 within 0.1 of 1
+  ReLU (p=1)            0.982       0.95 within 0.1 of 1
+  ReLU^2 (p=2)          1.913       1.96 within 0.15 of 2
+  ReLU^3 (p=3)          2.810       2.79 > 2.5
+  linear_stores_and_relu_slope_within_0.1_of_1: True
+  relu_p2_slope_within_0.15_of_2: True
+  relu_p3_slope_above_2.5: True
+  VERIFY (2): PASS
+
+VERIFY (3) - previous-token MLP
+----------------------------------------------------------------------------------
+  data: 24867 train stories, 2763 validation stories
+  tokens: 9,667,035 train, 1,078,996 validation
+  architecture: embedding 64, hidden 512 tanh, output 512
+  optimizer: AdamW, 4000 steps, batch 16384, peak lr 0.006, warmup 200, cosine decay
+  final validation cross-entropy: 3.041007 nats/token
+  Part 2 bigram reference: 3.038 nats/token
+  absolute difference: 0.003007 (required <= 0.01): True
+  reference MLP value: 3.041 (difference 0.000007)
+  VERIFY (3): PASS
+
+Outputs
+----------------------------------------------------------------------------------
+  Figure 9: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure9_memory_capacity_d64.png
+  Figure 10: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure10_capacity_vs_dimension.png
+  capacity bars: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_verify1_capacity_bars.png
+  MLP training figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_mlp_training.png
+  memory curves: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_memory_curves.npz
+  median R table: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_memory_median_R.csv
+  MLP checkpoint: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_mlp_checkpoint.npz
+  MLP results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_mlp_results.json
+  results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_results.json
+  settings: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part3_settings.json
+
+Summary
+----------------------------------------------------------------------------------
+  VERIFY (1): PASS
+  VERIFY (2): PASS
+  VERIFY (3): PASS

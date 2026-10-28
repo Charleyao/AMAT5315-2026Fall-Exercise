@@ -1,0 +1,67 @@
+AMAT5315 Week 8 Part 6 - scaling laws
+====================================================================================
+
+Data
+------------------------------------------------------------------------------------
+  source: https://raw.githubusercontent.com/epoch-research/analyzing-chinchilla/92258837425e1b5f2851d624287f0120583a3d0e/data/svg_extracted_data.csv
+  runs: 245 total, 5 highest-loss removed, 240 used
+  N range: 5.733e+07 .. 1.618e+10
+  D=C/(6N) range: 8.187e+08 .. 3.178e+11 tokens
+  loss range: 2.0774 .. 3.4059
+
+Fitted Chinchilla law
+------------------------------------------------------------------------------------
+  L = E + A/N^alpha + B/D^beta
+  Huber(log L, delta=0.001) objective: 4.242809e-06
+  L-BFGS grid starts: 72; success: True
+  parameter            fit      std.error     95% CI lower     95% CI upper
+  E              1.817190       0.025919         1.765715         1.869960
+  A            477.701973     117.986974       280.884713       706.036702
+  B           2142.839554    1106.195598      1037.299685      5252.803663
+  alpha          0.347296       0.014867         0.315729         0.370421
+  beta           0.367160       0.019422         0.332166         0.410506
+  reference: E=1.817, A=478.0, B=2143.0, alpha=0.347, beta=0.367
+
+VERIFY (1) - parameter ranges
+------------------------------------------------------------------------------------
+  alpha_in_0.32_0.38: True
+  beta_in_0.32_0.42: True
+  E_in_1.75_1.90: True
+  VERIFY (1): PASS
+
+VERIFY (2) - log-loss residuals (predicted - observed)
+------------------------------------------------------------------------------------
+  our mean residual: -0.000657
+  published mean residual: +0.016742
+  our RMS residual: 0.007550
+  published RMS residual: 0.019250
+  our_abs_mean_residual_le_0.005: True
+  published_mean_residual_gt_0.01: True
+  VERIFY (2): PASS
+
+VERIFY (3) - compute-optimal allocation
+------------------------------------------------------------------------------------
+  at C=5.760e+23: N*=7.319e+10, D*=1.312e+12, D*/N*=17.9206
+  bootstrap 95% interval for D*/N*: [7.9632, 34.6101]
+  published law at same C: N*=3.219e+10, D*=2.982e+12, D*/N*=92.6474
+  Chinchilla: N=7e+10, D=1.4e+12, D/N=20.0
+  relative difference from Chinchilla ratio: -10.40%
+  ratio_between_10_and_30: True
+  reference_ratio_within_5_percent: True
+  VERIFY (3): PASS
+
+Outputs
+------------------------------------------------------------------------------------
+  Figure 19: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure19_scaling_fit.png
+  Figure 20: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure20_residuals.png
+  Figure 21: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure21_compute_optimal.png
+  bootstrap draws: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part6_bootstrap.npz
+  compute-optimal table: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part6_compute_optimal.csv
+  results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part6_results.json
+  settings: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part6_settings.json
+
+Summary
+------------------------------------------------------------------------------------
+  VERIFY (1): PASS
+  VERIFY (2): PASS
+  VERIFY (3): PASS

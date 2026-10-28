@@ -1,0 +1,87 @@
+AMAT5315 Week 8 Part 5 - the Transformer: training and generating
+====================================================================================
+
+Model
+------------------------------------------------------------------------------------
+  parameter count: 328,832
+  architecture: 2 layers, d_model=96, 4 heads, head_dim=24, context=64, MLP=384 GELU
+  training: 6000 steps, batch=32, peak lr=0.003, warmup=300
+  final validation loss: 1.716034 nats/token
+  final validation bits/char: 1.206566
+  trigram sample seed context: [EOS, 403] ('▁Once')
+  validation windows: 16,859
+
+VERIFY (1) - bits per character comparison
+------------------------------------------------------------------------------------
+  Uniform      4.386331
+  Unigram      3.402710
+  Bigram       2.136232
+  Trigram      1.472582
+  Transformer  1.206566
+  Transformer reference: 1.207; threshold < 1.310
+  VERIFY (1): PASS
+
+VERIFY (2) - context-length dependence
+------------------------------------------------------------------------------------
+  after 32 tokens mean loss: 1.646196 (threshold < 2.090)
+  final 8 positions mean: 1.654484 (reference approximately 1.65)
+  Bigram reference: 3.038; Trigram reference: 2.094
+  position losses (1..64): 3.220, 2.397, 2.039, 1.947, 1.860, 1.829, 1.785, 1.756, 1.716, 1.734, 1.739, 1.705, 1.685, 1.676, 1.715, 1.695, 1.681, 1.700, 1.658, 1.666, 1.677, 1.666, 1.682, 1.656, 1.660, 1.655, 1.679, 1.659, 1.661, 1.650, 1.657, 1.652, 1.644, 1.648, 1.638, 1.651, 1.676, 1.664, 1.630, 1.617, 1.644, 1.659, 1.648, 1.650, 1.622, 1.642, 1.643, 1.638, 1.627, 1.632, 1.639, 1.654, 1.638, 1.648, 1.629, 1.656, 1.648, 1.635, 1.642, 1.648, 1.668, 1.665, 1.665, 1.664
+  mean_loss_after_32_tokens_below_2.09: True
+  final8_close_to_reference: True
+  VERIFY (2): PASS
+
+VERIFY (3) - exact sampling distributions
+------------------------------------------------------------------------------------
+  broad context (validation index 5593): H=3.7374
+  context text: muddy outside. Ava saw a big, green hose in the yard. She asked her mommy if they could use it to play.
+Her mommy agreed. Ava
+  method                             chi2    dof      p-value  categories status
+  Temperature T=0.8               106.816    113      0.64601         113 PASS
+  Top-k (k=20, T=0.8)              12.160     19     0.878667          20 PASS
+  Top-p (p=0.9, T=0.8)             23.939     27     0.633678          28 PASS
+  Min-p (p=0.1, T=0.7)              7.992     13     0.844144          14 PASS
+  T=0.0001: argmax token 272, max probability 1, 1000/1000 argmax: True
+  VERIFY (3): PASS
+
+VERIFY (4) - surprise versus entropy
+------------------------------------------------------------------------------------
+  T=1.0: mean surprise=1.736733, mean entropy=1.737105, difference=-0.000372, SE=0.010642, z=-0.035
+  T=0.7, scored at T=1: mean surprise=1.216935, mean entropy=1.658102, difference=-0.441167, SE=0.006355, z=-69.417
+  checks: T=1 -4<z<4: True; T=0.7 |z|>40: True
+  VERIFY (4): PASS
+
+Temperature-1 story samples (seed 1848, increasing quality)
+------------------------------------------------------------------------------------
+  [Uniform] C ?R? for he> weHo? L? t?ed  B  On4? dv	?? m/?5idmy?ith?B?g toch ?6bent?R betv<??f d??
+  [Unigram] spd to.etingonheheedent a g theedae.wr playumye he Heoureked  cAd the epingotey b grendndcc s go ca had oided ss p
+  [Bigram] Lily, there was very mad she a som we worited with it. Mick. She said. She flealan's the pris plag wat bared. re with elewing unt and anor
+  [Trigram] upon a time, there was a pin and at apple and it was very happy. Tim liked to Tom and Sue and Danny day, Lily, and car birdc I?nts play more to shar
+  [Transformer] Sue and Max were tired a garage. They wanted to make the bird. Spot sniffe like the bird, but the bird said, "Let us b
+
+Sampling-method examples (seed 1848)
+------------------------------------------------------------------------------------
+  [Temperature T=0.8] Lily paint and her cheered for a walk. They liked to play with him and play all day. She loved to play near the pastair and always ever again. Once upon
+  [Top-k (k=20, T=0.8)] Lily found a pretty boot in the sky. She wanted to help her mother. She jumped into the boy and saw that the boy was sad.
+The p
+  [Top-p (p=0.9, T=0.8)] One day, a little boy named Tim went to the park. He saw a big dog. The dog did not know what to do. The dog looked very at the box. The boy c
+  [Min-p (p=0.1, T=0.7)] One day, a little boy named Tim went to the park. He saw a big, red ball. The boy wanted to help the boy. Sam said, "Tim, can I have a spe
+
+Outputs
+------------------------------------------------------------------------------------
+  bits/char figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_verify1_bits_per_char.png
+  model samples figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_verify1_model_samples.png
+  context-length figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure17_context_length.png
+  training figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_transformer_training.png
+  sampling examples figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_sampling_method_examples.png
+  verify4 figure: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/evidence/figure_verify4_surprise_entropy.png
+  checkpoint: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part5_transformer_checkpoint.npz
+  results: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part5_results.json
+  settings: /home/yao_yiyi/AMAT5315-2026Fall-Exercise/week8/artifacts/part5_settings.json
+
+Summary
+------------------------------------------------------------------------------------
+  VERIFY (1): PASS
+  VERIFY (2): PASS
+  VERIFY (3): PASS
+  VERIFY (4): PASS

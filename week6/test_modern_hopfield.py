@@ -73,9 +73,32 @@ def test_single_query_matches_batched_call():
     )
 
 
+def test_corrupted_stored_queries_follow_protocol():
+    random_lower = mh.random_lower_spins(100)
+    for p in (3, 10, 30, 100):
+        patterns, _labels = mh.mnist_spin_patterns(p)
+        queries, indices, originals = mh.corrupted_stored_queries(
+            patterns, random_lower, 100
+        )
+        np.testing.assert_array_equal(indices, np.arange(100) % p)
+        np.testing.assert_array_equal(np.asarray(originals), np.asarray(patterns)[indices])
+        # Upper half from the stored digit, lower half from the random spins.
+        np.testing.assert_array_equal(
+            np.asarray(queries)[:, : mh.LOWER_START],
+            np.asarray(originals)[:, : mh.LOWER_START],
+        )
+        np.testing.assert_array_equal(
+            np.asarray(queries)[:, mh.LOWER_START:],
+            np.asarray(random_lower)[:, mh.LOWER_START:],
+        )
+        assert queries.shape == (100, 784)
+
+
 def test_attention_equivalence_with_scale_beta():
     patterns, _ = mh.mnist_spin_patterns(100)
-    queries, _ = mh.held_out_spins(20)
+    queries, _indices, _originals = mh.corrupted_stored_queries(
+        patterns, mh.random_lower_spins(100), 100
+    )
     for beta in (0.001, 0.03, 0.3, 1.0):
         manual, _weights = mh.modern_hopfield_update(patterns, queries, beta)
         attention = mh.attention_update(patterns, queries, beta)
@@ -84,7 +107,9 @@ def test_attention_equivalence_with_scale_beta():
 
 def test_attention_uses_explicit_beta_not_default_scale():
     patterns, _ = mh.mnist_spin_patterns(100)
-    queries, _ = mh.held_out_spins(4)
+    queries, _indices, _originals = mh.corrupted_stored_queries(
+        patterns, mh.random_lower_spins(100), 4
+    )
     beta = 0.3
     manual, _ = mh.modern_hopfield_update(patterns, queries, beta)
     scaled = jax.nn.dot_product_attention(
@@ -105,7 +130,9 @@ def test_attention_uses_explicit_beta_not_default_scale():
 
 def test_larger_beta_concentrates_weight_on_most_similar_pattern():
     patterns, _ = mh.mnist_spin_patterns(100)
-    query, _ = mh.held_out_spins(1)
+    query, _indices, _originals = mh.corrupted_stored_queries(
+        patterns, mh.random_lower_spins(100), 1
+    )
     similarities = np.asarray(patterns @ query[0])
     most_similar = int(np.argmax(similarities))
     top_weights = []
@@ -127,7 +154,9 @@ def test_saved_experiment_verifies_requirements():
     settings = data["settings"]
     assert settings["P"] == [3, 10, 30, 100, 300, 1000]
     assert settings["betas"] == [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-    assert settings["n_queries"] == 20
+    assert settings["n_queries"] == 100
+    assert settings["query_seed"] == mh.QUERY_SEED
+    assert "cycling through P" in settings["query_source"]
     assert settings["plot_P"] == 100
     assert settings["plot_betas"] == [0.003, 0.03, 0.3]
 

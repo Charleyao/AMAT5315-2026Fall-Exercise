@@ -38,14 +38,15 @@ FIGURE_PATH = EVIDENCE_DIR / "modern_hopfield_weights.png"
 
 P_VALUES = [3, 10, 30, 100, 300, 1000]
 BETAS = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-N_QUERIES = 20
+N_QUERIES = 100
 PLOT_P = 100
 PLOT_BETAS = [0.003, 0.03, 0.3]
 PLOT_QUERY = 0
 
 
 def run_experiment() -> dict:
-    queries, query_labels = mh.held_out_spins(N_QUERIES)
+    random_lower = mh.random_lower_spins(N_QUERIES)
+    plot_original_label = None
 
     max_difference = 0.0
     max_weight_sum_error = 0.0
@@ -56,7 +57,12 @@ def run_experiment() -> dict:
     plot_weights = {}
 
     for p in P_VALUES:
-        patterns, _labels = mh.mnist_spin_patterns(p)
+        patterns, pattern_labels = mh.mnist_spin_patterns(p)
+        queries, source_indices, _originals = mh.corrupted_stored_queries(
+            patterns, random_lower, N_QUERIES
+        )
+        if p == PLOT_P:
+            plot_original_label = int(pattern_labels[source_indices[PLOT_QUERY]])
         difference_by_point[str(p)] = {}
         sum_error_by_point[str(p)] = {}
         concentration[str(p)] = {}
@@ -95,14 +101,14 @@ def run_experiment() -> dict:
             "P": P_VALUES,
             "betas": BETAS,
             "n_queries": N_QUERIES,
-            "query_source": "first 20 held-out MNIST test images as +/-1 spins",
+            "query_source": "100 stored MNIST training digits cycling through P, lower half random +/-1",
+            "query_seed": mh.QUERY_SEED,
             "plot_P": PLOT_P,
             "plot_betas": PLOT_BETAS,
             "plot_query": PLOT_QUERY,
             "update": "x_new = X^T softmax(beta * (X x))",
             "attention": "jax.nn.dot_product_attention(scale=beta)",
         },
-        "query_labels": query_labels.tolist(),
         "max_abs_difference": max_difference,
         "max_weight_sum_error": max_weight_sum_error,
         "argmax_matches_most_similar": argmax_matches,
@@ -112,6 +118,7 @@ def run_experiment() -> dict:
         "plot": {
             "P": PLOT_P,
             "query_index": PLOT_QUERY,
+            "original_label": plot_original_label,
             "weights": plot_weights,
             "top_indices": {
                 str(beta): int(np.argmax(plot_weights[str(beta)])) for beta in PLOT_BETAS
@@ -148,8 +155,8 @@ def build_figure(data: dict) -> plt.Figure:
         axis.set_title(rf"$\beta$ = {beta}")
         axis.grid(alpha=0.25)
     fig.suptitle(
-        f"Modern Hopfield softmax weights (P = {PLOT_P}, held-out query "
-        f"{PLOT_QUERY}, label {data['query_labels'][PLOT_QUERY]})",
+        f"Modern Hopfield softmax weights (P = {PLOT_P}, corrupted stored "
+        f"query {PLOT_QUERY}, label {data['plot']['original_label']})",
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.93))
@@ -169,12 +176,12 @@ def main() -> None:
     print("Modern Hopfield vs JAX softmax attention")
     print(f"  tested P: {P_VALUES}")
     print(f"  tested beta: {BETAS}")
-    print(f"  queries: {N_QUERIES} held-out test digits")
+    print(f"  queries: {N_QUERIES} corrupted stored digits (cycling through P)")
     print(f"  max |manual - attention|: {data['max_abs_difference']:.3e}")
     print(f"  max |sum(weights) - 1|:   {data['max_weight_sum_error']:.3e}")
     print(f"  argmax weight == most similar pattern: {data['argmax_matches_most_similar']}")
 
-    print("\n  P = 100, held-out query 0: weight concentration vs beta")
+    print("\n  P = 100, corrupted stored query 0: weight concentration vs beta")
     for beta in PLOT_BETAS:
         top = data["plot"]["top_weights"][str(beta)]
         index = data["plot"]["top_indices"][str(beta)]

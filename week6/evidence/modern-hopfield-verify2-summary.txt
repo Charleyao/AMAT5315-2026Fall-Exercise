@@ -1,0 +1,21 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+Modern vs classical Hopfield retrieval (P=1000 gallery)
+  beta     sign-agreement   exact-match   distance-to-mean
+  0.001   0.874+/-0.004      0.000        0.002
+  0.003   0.876+/-0.004      0.000        0.006
+  0.01    0.882+/-0.004      0.000        0.021
+  0.03    0.909+/-0.004      0.000        0.067
+  0.1     0.994+/-0.002      0.780        0.280
+  0.3     0.995+/-0.002      0.910        0.328
+  1.0     0.995+/-0.002      0.920        0.332
+  classical: sign agreement 0.873, exact 0.000, ink 0.028 (stored 0.129), pairwise 1.000, unique states 1
+
+  [ok] small beta gives the blurred average pattern
+  [ok] large beta retrieves the stored digit
+  [ok] classical recall collapses to a common, incomplete pattern
+  [ok] query protocol uses stored digits with random lower halves
+
+  data:    artifacts/modern_hopfield_retrieval.json
+  arrays:  artifacts/modern_hopfield_retrieval.npz
+  gallery: evidence/modern_hopfield_retrieval_gallery.png
+  metrics: evidence/modern_hopfield_retrieval_metrics.png

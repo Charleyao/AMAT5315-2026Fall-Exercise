@@ -561,34 +561,39 @@ patterns, and an explicit **`scale=beta`** (not the default `1/sqrt(d)`):
 `jax.nn.dot_product_attention(..., scale=beta)`.
 
 Tested grid: `P ∈ {3, 10, 30, 100, 300, 1000}`, `beta ∈ {0.001, 0.003,
-0.01, 0.03, 0.1, 0.3, 1}`, with 20 held-out test images as queries.
+0.01, 0.03, 0.1, 0.3, 1}`. The queries follow the learning-sheet protocol:
+**100 stored MNIST training digits**, cycling through the `P` stored patterns,
+with the upper 14 rows kept and the lower 14 rows replaced by random ±1 spins
+(seed 5315). No held-out test digits are used.
 
 ![Modern Hopfield softmax weights](evidence/modern_hopfield_weights.png)
 
 ### VERIFY (1) results
 
 - Maximum absolute difference between the manual update and JAX softmax
-  attention across **all 20 queries × 6 P × 7 beta**: **2.801 × 10⁻⁶**
-  (< 1 × 10⁻⁵).
-- Maximum `|sum(weights) − 1|`: **4.768 × 10⁻⁷**.
+  attention across **all 100 queries × 6 P × 7 beta**: **0.0** (the two
+  implementations agree to float32) — well below 1 × 10⁻⁵.
+- Maximum `|sum(weights) − 1|`: **5.364 × 10⁻⁷**.
 
-Softmax weights for `P = 100` and one held-out query (label 7):
+Softmax weights for `P = 100` and corrupted stored query 0 (stored label 5):
 
 | beta | top weight | entropy (nats) | argmax pattern |
 |-----:|-----------:|---------------:|---------------:|
-| 0.003 | 0.0145 | 4.594 | 84 |
-| 0.03 | 0.1588 | 3.647 | 84 |
-| 0.3 | 0.9985 | 0.011 | 84 |
+| 0.003 | 0.0137 | 4.602 | 0 |
+| 0.03 | 0.1722 | 4.112 | 0 |
+| 0.3 | 1.0000 | 0.000 | 0 |
 
 Verification status:
 
-- ✅ Maximum implementation difference **< 1e-5** (2.8e-6).
+- ✅ Maximum implementation difference **< 1e-5** (observed 0.0).
 - ✅ Softmax weights sum to 1 for every query, P and beta.
 - ✅ Larger beta concentrates weight on the **most similar stored pattern**
   (top weight rises and entropy falls); the argmax always equals the
   most-similar pattern index.
 - ✅ The attention implementation uses `scale=beta`; a default-scale call
   differs measurably, so the scale is not accidentally the default.
+- ✅ The attention-equivalence test is preserved under the corrected
+  stored-digit query protocol.
 - ✅ Consistent with the page-15 behaviour: attention weights are a proper
   distribution over stored patterns and sharpen toward the best match as beta
   increases.
@@ -596,6 +601,51 @@ Verification status:
 Raw data: `artifacts/modern_hopfield_attention.json` (per-point differences,
 weight sums, concentration metrics and plotted weights; gitignored). Run log:
 `evidence/modern-hopfield-verify1-summary.txt`.
+
+## Part 4 — VERIFY (2): modern vs classical retrieval
+
+`modern_hopfield_retrieval.py` uses the same corrected protocol: 100 stored
+digits cycling through `P`, upper half kept, lower half random ±1. Modern
+retrieval is one update `X^T softmax(beta X x)` for every beta. Classical
+retrieval uses async zero-temperature Hopfield recall on the same patterns and
+queries. The gallery uses `P = 1000`.
+
+![Modern vs classical retrieval gallery](evidence/modern_hopfield_retrieval_gallery.png)
+
+![Retrieval metrics across beta](evidence/modern_hopfield_retrieval_metrics.png)
+
+### VERIFY (2) results (gallery setting P = 1000)
+
+| beta | sign agreement | exact stored-digit match | distance to average pattern |
+|-----:|---------------:|-------------------------:|----------------------------:|
+| 0.001 | 0.874 | 0.000 | 0.002 |
+| 0.003 | 0.876 | 0.000 | 0.006 |
+| 0.01 | 0.882 | 0.000 | 0.021 |
+| 0.03 | 0.909 | 0.000 | 0.067 |
+| 0.1 | 0.994 | 0.780 | 0.280 |
+| 0.3 | 0.995 | 0.910 | 0.328 |
+| 1.0 | **0.995** | **0.920** | 0.332 |
+
+Classical recall: sign agreement 0.873, exact match 0.000, ink fraction
+**0.028** (stored patterns 0.129), mean pairwise output overlap **1.000**, and
+**1 unique state** across all 100 queries — it collapses to one common,
+incomplete pattern.
+
+Verification status:
+
+- ✅ Small beta gives the **blurred average digit** (distance to the average
+  pattern 0.002 at beta = 0.001, increasing to 0.332 at beta = 1).
+- ✅ Large beta **retrieves the stored digit** (92% exact matches, sign
+  agreement 0.995 at beta = 1).
+- ✅ Classical recall **collapses to a common, incomplete pattern** (one
+  unique state, ink fraction well below the stored digits).
+- ✅ Query protocol is the sheet version consistently: stored digits only,
+  cycling through `P`, with random lower halves; no held-out retrieval targets.
+- ✅ The VERIFY (1) attention-equivalence test still passes under this protocol.
+
+Raw data: `artifacts/modern_hopfield_retrieval.json` (per-query metrics) and
+`artifacts/modern_hopfield_retrieval.npz` (gallery arrays; gitignored). Run
+log: `evidence/modern-hopfield-verify2-summary.txt`.
 
 ## How to reproduce
 
@@ -613,7 +663,8 @@ uv run python verify4_completion.py            # Part 2 VERIFY (4): completion
 uv run python hopfield_experiment.py           # Part 3 VERIFY (1): alpha sweep
 uv run python hopfield_recall.py               # Part 3 VERIFY (2): capacity
 uv run python modern_hopfield_experiment.py    # Part 4 VERIFY (1): attention
-uv run python -m pytest -q                     # 120 tests
+uv run python modern_hopfield_retrieval.py     # Part 4 VERIFY (2): retrieval
+uv run python -m pytest -q                     # 125 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -631,5 +682,5 @@ after the checksum matches.
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
   RBM and VERIFY (1)–(4), Part 3 Hopfield VERIFY (1)–(2), and Part 4
-  VERIFY (1) modern Hopfield/attention. Part 4 VERIFY (2)–(3) and the final
-  verification are not implemented yet.
+  VERIFY (1)–(2) modern Hopfield/attention and retrieval. Part 4 VERIFY (3)
+  and the final verification are not implemented yet.

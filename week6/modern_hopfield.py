@@ -24,6 +24,10 @@ import rbm
 WEEK_DIR = Path(__file__).resolve().parent
 MNIST_DIR = WEEK_DIR / "inputs" / "mnist"
 
+UPPER_ROWS = 14
+LOWER_START = UPPER_ROWS * 28  # 392: first missing pixel
+QUERY_SEED = 5315
+
 
 def mnist_spin_patterns(p: int, directory: Path = MNIST_DIR):
     """First ``p`` training images as +/-1 spins, in original stored order."""
@@ -32,11 +36,35 @@ def mnist_spin_patterns(p: int, directory: Path = MNIST_DIR):
     return jnp.asarray(spins), np.asarray(labels[:p])
 
 
-def held_out_spins(n: int = 20, directory: Path = MNIST_DIR):
-    """First ``n`` test images as +/-1 spins (held-out queries)."""
-    images, labels = rbm.load_binary_mnist("test", directory)
-    spins = rbm.to_spins(images[:n]).astype(np.float32)
-    return jnp.asarray(spins), np.asarray(labels[:n])
+def random_lower_spins(
+    n_queries: int = 100, seed: int = QUERY_SEED, n_visible: int = rbm.VISIBLE_UNITS
+) -> jax.Array:
+    """Fixed random +/-1 lower halves used to corrupt the stored-digit queries."""
+    bits = jax.random.bernoulli(
+        jax.random.PRNGKey(seed), 0.5, (n_queries, n_visible)
+    )
+    return jnp.where(bits, 1.0, -1.0)
+
+
+def corrupted_stored_queries(
+    patterns: jax.Array, random_lower: jax.Array, n_queries: int = 100
+):
+    """Query 100 stored digits (cycling through ``P``) with random lower halves.
+
+    The upper 14 rows are kept from the stored digit; the lower 14 rows are
+    replaced by the supplied random +/-1 spins. Returns
+    ``(queries, source_indices, originals)``.
+    """
+    patterns = jnp.asarray(patterns, dtype=jnp.float32)
+    random_lower = jnp.asarray(random_lower, dtype=jnp.float32)
+    n_patterns = patterns.shape[0]
+    indices = np.arange(n_queries) % n_patterns
+    originals = patterns[indices]
+    upper_mask = jnp.concatenate(
+        [jnp.ones(LOWER_START), jnp.zeros(rbm.VISIBLE_UNITS - LOWER_START)]
+    )
+    queries = jnp.where(upper_mask, originals, random_lower[:n_queries])
+    return queries, indices, originals
 
 
 def softmax_weights(patterns: jax.Array, queries: jax.Array, beta: float) -> jax.Array:
@@ -63,7 +91,7 @@ def modern_hopfield_update(patterns: jax.Array, queries: jax.Array, beta: float)
 def attention_update(patterns: jax.Array, queries: jax.Array, beta: float) -> jax.Array:
     """Same operation via ``jax.nn.dot_product_attention`` with ``scale=beta``.
 
-    Query = held-out state, keys = values = stored patterns. The explicit
+    Query = corrupted state, keys = values = stored patterns. The explicit
     ``scale=beta`` replaces the default ``1/sqrt(head_dim)`` attention scale.
     """
     patterns = jnp.asarray(patterns, dtype=jnp.float32)

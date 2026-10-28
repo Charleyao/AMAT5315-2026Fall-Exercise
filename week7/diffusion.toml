@@ -1,0 +1,22 @@
+[model]
+hidden_layers = [128, 128, 128]
+activation = "silu"
+time_features = 32
+time_offset = -1
+weight_init = "normal"
+weight_init_std = "1/sqrt(input_width)"
+
+[optimizer]
+name = "adam"
+learning_rate = 0.001
+lr_schedule = "cosine"
+lr_final = 0.0
+
+[training]
+batch_size = 512
+updates = 25000
+seed = 2026
+dtype = "float32"
+
+[checkpoints]
+updates = [0, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 25000]

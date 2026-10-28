@@ -1,0 +1,36 @@
+Week 7 Part 1 VERIFY (2) -- training + DDPM reverse sampling
+device: cpu:0
+config: diffusion.toml
+updates: 25000
+checkpoints: [0, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 25000]
+training ...
+checkpoint update=    50 mean_loss=0.666248
+checkpoint update=   100 mean_loss=0.496017
+checkpoint update=   200 mean_loss=0.338292
+checkpoint update=   500 mean_loss=0.274175
+checkpoint update=  1000 mean_loss=0.260759
+checkpoint update=  2000 mean_loss=0.255223
+checkpoint update=  5000 mean_loss=0.257141
+checkpoint update= 10000 mean_loss=0.249351
+checkpoint update= 25000 mean_loss=0.248167
+generating 10 DDPM trajectories at every checkpoint ...
+training diagnostics:
+  update=     0  mean_loss=      n/a
+  update=    50  mean_loss=0.666248  last=0.571829
+  update=   100  mean_loss=0.496017  last=0.455348
+  update=   200  mean_loss=0.362325  last=0.290499
+  update=   500  mean_loss=0.291832  last=0.248902
+  update=  1000  mean_loss=0.263296  last=0.302516
+  update=  2000  mean_loss=0.257364  last=0.268763
+  update=  5000  mean_loss=0.253851  last=0.250859
+  update= 10000  mean_loss=0.251218  last=0.264171
+  update= 25000  mean_loss=0.247490  last=0.253094
+final training loss (last update): 0.253094
+final 50-update mean loss: 0.248167
+trajectory array shape: (10, 1001, 10, 2)
+trajectories finite: True
+VERIFY (2): COMPLETE
+animation: evidence/verify2_endpoint_evolution.mp4
+checkpoints: evidence/verify2_checkpoints.png
+training loss: evidence/training_loss.png
+results: artifacts/verify2_results.json

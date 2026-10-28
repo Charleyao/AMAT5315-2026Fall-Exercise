@@ -1,0 +1,21 @@
+Week 7 Part 1 VERIFY (3) -- trained-model sampling
+device: cpu:0
+checkpoint: artifacts/checkpoints/params-025000.npz
+num_samples: 2000
+reverse_steps: 1000
+seed: 5315
+running 1000 DDPM reverse steps for 2000 samples ...
+
+Targets: population 0.25 +/- 0.04; center each coordinate +/- 0.05; std x/y 0.30 +/- 0.03
+Cluster | n | population | pop | center estimate | max|dcenter| | center | std x | std y | max|dstd| | std | overall
+Cluster 0 |  484 | 0.2420 | PASS | (+2.9930, +0.0108) | 0.0108 | PASS | 0.2908 | 0.3008 | 0.0092 | PASS | PASS
+Cluster 1 |  507 | 0.2535 | PASS | (+0.0176, +3.0086) | 0.0176 | PASS | 0.2971 | 0.2776 | 0.0224 | PASS | PASS
+Cluster 2 |  488 | 0.2440 | PASS | (-2.9923, +0.0080) | 0.0080 | PASS | 0.3011 | 0.2995 | 0.0011 | PASS | PASS
+Cluster 3 |  521 | 0.2605 | PASS | (-0.0031, -3.0021) | 0.0031 | PASS | 0.2981 | 0.3118 | 0.0118 | PASS | PASS
+Overall VERIFY (3): PASS
+
+VERIFY (3): PASS
+animation: evidence/reverse_diffusion.mp4
+keyframes: evidence/reverse_diffusion_keyframes.png
+generated vs target: evidence/verify3_generated_vs_target.png
+results: artifacts/verify3_results.json

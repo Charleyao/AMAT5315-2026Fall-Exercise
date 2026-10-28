@@ -1,8 +1,8 @@
-# Week 7 — Part 1: Diffusion Training and VERIFY (2)
+# Week 7 — Part 1: Diffusion Training and VERIFY (1)–(3)
 
 This specification covers **Part 1 only**: the Gaussian-mixture forward process,
-the time-conditioned noise predictor, DDPM reverse sampling, and VERIFY (2).
-VERIFY (3), Part 2, and later high-dimensional diffusion work are out of scope.
+the time-conditioned noise predictor, DDPM reverse sampling, and VERIFY (1),
+(2), and (3). Part 2 and later high-dimensional diffusion work are out of scope.
 
 ## Data distribution
 
@@ -84,6 +84,25 @@ no clipping is applied.
    training, with the training-loss history and a label for every checkpoint.
 6. Save a figure showing the 10 reverse trajectories at every checkpoint.
 
+## VERIFY (3): trained-model sampling
+
+1. Load the saved update-25000 checkpoint. Do not retrain.
+2. Generate 2000 samples using the trained noise predictor and 1000 DDPM
+   reverse steps, with an explicit reproducible seed.
+3. Save an animation of the reverse process from Gaussian noise to the four
+   generated clusters.
+4. Plot the final generated samples beside 2000 exact target samples drawn from
+   the Gaussian mixture.
+5. Assign each generated sample to its nearest target center.
+6. For every cluster, compute:
+   - population fraction, target `0.25` with tolerance `0.04`;
+   - estimated center, with each coordinate within `0.05` of the target
+     center;
+   - standard deviation in x and y, target `0.30` with tolerance `0.03`.
+7. Print a PASS/FAIL table covering every criterion, save the figures and
+   animation in `evidence/`, and save the raw samples, trajectory, and metrics
+   in `artifacts/`.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -92,13 +111,15 @@ no clipping is applied.
 - Evidence in `week7/evidence/`:
   - VERIFY (1) animation, keyframes, and log;
   - VERIFY (2) endpoint-evolution animation, checkpoint grid, training-loss
-    figure, and log.
-- Raw checkpoints, losses, trajectories, and numerical results in
+    figure, and log;
+  - VERIFY (3) reverse-diffusion animation, reverse keyframes,
+    generated-vs-target figure, and PASS/FAIL log.
+- Raw checkpoints, losses, trajectories, samples, and numerical results in
   `week7/artifacts/` (ignored by Git).
 
 ## Out of scope
 
-- VERIFY (3) and Part 2.
+- Part 2 and later tasks.
 - CIFAR-10 diffusion or any high-dimensional image training.
 - Use or modification of the provided `week7/data/` resources.
 

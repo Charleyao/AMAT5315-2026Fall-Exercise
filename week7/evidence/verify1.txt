@@ -1,0 +1,20 @@
+Week 7 Part 1 VERIFY (1) -- forward diffusion
+device: cpu:0
+seed: 5315
+num_samples: 2000
+num_steps: 1000
+beta_1: 0.00010000
+beta_1000: 0.02000000
+alpha_bar_1000: 4.03582999e-05
+t=1000 coordinate means:
+  mean x = +0.008245
+  mean y = -0.022044
+t=1000 coordinate variances:
+  variance x = 1.047978
+  variance y = 0.996061
+means within 0.1 of zero: PASS
+variances within 0.1 of one: PASS
+VERIFY (1): PASS
+animation: evidence/forward_diffusion.mp4
+keyframes: evidence/forward_diffusion_keyframes.png
+results: artifacts/forward_diffusion_results.json

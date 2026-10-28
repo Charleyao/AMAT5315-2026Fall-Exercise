@@ -1,0 +1,31 @@
+{
+  "source": "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
+  "source_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+  "selection": "First four official test images for evaluation; next four for validation. Selected before reconstruction.",
+  "test_ids": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "validation_ids": [
+    4,
+    5,
+    6,
+    7
+  ],
+  "labels": [
+    3,
+    8,
+    8,
+    0
+  ],
+  "validation_labels": [
+    6,
+    6,
+    1,
+    6
+  ],
+  "preprocessing": "32x32 RGB uint8, NCHW float32 /127.5-1.",
+  "training": "Frozen google/ddpm-cifar10-32 checkpoint; no Week 7 training."
+}

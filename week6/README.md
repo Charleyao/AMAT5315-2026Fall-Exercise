@@ -392,6 +392,59 @@ Raw results: `artifacts/verify3_sampling.json` and
 `artifacts/verify3_snapshots.npz` (gitignored). Run log:
 `evidence/verify3-summary.txt`.
 
+## Part 2 — VERIFY (4): image completion with clamped upper halves
+
+`verify4_completion.py` reuses the frozen CD-1/CD-10 checkpoints and the
+`rbm.toml` settings.
+
+- **Data:** first **64** held-out MNIST test images (seed 6607).
+- **Clamping:** the upper **14 rows** are observed and restored after *every*
+  Gibbs step; the lower **14 rows** start from random bits and are sampled.
+- **Chains:** **8 independent chains per image**; all runs share identical
+  initial lower-half randomness and matched per-step noise keys.
+- **Steps:** recorded after **1, 10, 100, 1000** Gibbs steps.
+- **Overlap:** Dice coefficient on the lower half,
+  `2|A n B| / (|A| + |B|)`, averaged over each image's 8 chains; error bars
+  are standard errors across the 64 images.
+- **Wrong upper:** the upper half of the next test image with a **different
+  label** (wrapping inside the 64 images); the evaluation target stays the
+  original image's true lower half.
+
+![Completion with true upper halves](evidence/verify4_completion_true.png)
+
+![Completion with wrong upper halves](evidence/verify4_completion_wrong.png)
+
+![Completion overlap vs Gibbs steps](evidence/verify4_overlap_curves.png)
+
+### VERIFY (4) results
+
+Lower-half Dice overlap, mean ± SE over 64 images:
+
+| Condition | 1 step | 10 steps | 100 steps | 1000 steps |
+|-----------|:------:|:--------:|:---------:|:----------:|
+| CD-1 true upper  | 0.263 ± 0.010 | 0.340 ± 0.013 | 0.369 ± 0.017 | **0.386 ± 0.020** |
+| CD-1 wrong upper | 0.240 ± 0.009 | 0.238 ± 0.011 | 0.225 ± 0.013 | **0.212 ± 0.014** |
+| CD-10 true upper  | 0.318 ± 0.012 | 0.384 ± 0.016 | 0.442 ± 0.016 | **0.489 ± 0.017** |
+| CD-10 wrong upper | 0.300 ± 0.010 | 0.295 ± 0.012 | 0.253 ± 0.013 | **0.232 ± 0.013** |
+
+At 1000 steps the true-upper over wrong-upper gap is **0.174** for CD-1 and
+**0.257** for CD-10, both well above the required 0.1. This is close to the
+sheet's reference (CD-1 0.40 vs 0.24; CD-10 0.51 vs 0.27; the small offset
+comes from the sampled lower-half initialization and noise realization).
+
+Verification status:
+
+- ✅ Observed upper pixels are unchanged after every Gibbs step (checked at
+  bit level for all 64 images, 8 chains and 4 step counts, both conditions).
+- ✅ True-upper overlap increases monotonically with sampling steps.
+- ✅ At 1000 steps, true-upper overlap exceeds wrong-upper overlap by ≥ 0.1
+  for **both** models (0.174 and 0.257).
+- ✅ Standard errors are reported across the 64 test images.
+
+Raw data: `artifacts/verify4_completion.json` (means, SEs, per-image overlaps)
+and `artifacts/verify4_snapshots.npz` (per-chain overlaps and gallery
+snapshots), both gitignored. Run log: `evidence/verify4-summary.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -404,7 +457,8 @@ uv run python rbm.py                           # RBM basics + finite checks
 uv run python verify1_figures.py               # Part 2 VERIFY (1) figures
 uv run python cd_training.py                   # Part 2 VERIFY (2): CD-1 vs CD-10
 uv run python verify3_sampling.py              # Part 2 VERIFY (3): frozen sampling
-uv run python -m pytest -q                     # 85 tests
+uv run python verify4_completion.py            # Part 2 VERIFY (4): completion
+uv run python -m pytest -q                     # 94 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -421,6 +475,6 @@ after the checksum matches.
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
-  RBM, VERIFY (1) figures, VERIFY (2) CD-1/CD-10 training and VERIFY (3)
-  frozen reconstruction/generation. VERIFY (4) and Part 3 are not implemented
-  yet.
+  RBM, VERIFY (1) figures, VERIFY (2) CD-1/CD-10 training, VERIFY (3) frozen
+  reconstruction/generation and VERIFY (4) clamped-upper completion. Part 3 is
+  not implemented yet.

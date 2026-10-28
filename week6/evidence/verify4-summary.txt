@@ -1,0 +1,19 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+
+VERIFY (4) results: lower-half Dice overlap (mean +/- SE over 64 images)
+  CD1:
+    true : 0.263+/-0.010  0.340+/-0.013  0.369+/-0.017  0.386+/-0.020
+    wrong: 0.240+/-0.009  0.238+/-0.011  0.225+/-0.013  0.212+/-0.014
+  CD10:
+    true : 0.318+/-0.012  0.384+/-0.016  0.442+/-0.016  0.489+/-0.017
+    wrong: 0.300+/-0.010  0.295+/-0.012  0.253+/-0.013  0.232+/-0.013
+
+  observed pixels unchanged: True
+  [ok] CD1 true 0.386 vs wrong 0.212 at 1000 steps (gap 0.174)
+  [ok] CD10 true 0.489 vs wrong 0.232 at 1000 steps (gap 0.257)
+
+  results: artifacts/verify4_completion.json
+  raw:     artifacts/verify4_snapshots.npz
+  figure:  evidence/verify4_completion_true.png
+  figure:  evidence/verify4_completion_wrong.png
+  figure:  evidence/verify4_overlap_curves.png

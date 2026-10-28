@@ -1,11 +1,10 @@
-# Week 7 — Parts 1–3 (through Part 3 VERIFY (2))
+# Week 7 — Parts 1–4 (through Part 4 VERIFY (1))
 
-This specification covers **Part 1**, **Part 2 VERIFY (1)**, and **Part 3
-VERIFY (1)–(2)**: the Gaussian-mixture forward process, the time-conditioned
-noise predictor, DDPM reverse sampling, VERIFY (1)–(3), deterministic DDIM
-sampling, comparison with the exact conditional-mean predictor, Flow Matching of
-a new velocity network, and the sampling-step comparison. Part 4 and later
-high-dimensional diffusion work are out of scope.
+This specification covers **Part 1**, **Part 2 VERIFY (1)**, **Part 3 VERIFY
+(1)–(2)**, and **Part 4 VERIFY (1)**: the Gaussian-mixture forward process, the
+time-conditioned noise predictor, DDPM reverse sampling, VERIFY (1)–(3),
+deterministic DDIM sampling, Flow Matching, the sampling-step comparison, and
+pretrained CIFAR-10 DDPM sampling. Part 5 and later work are out of scope.
 
 ## Data distribution
 
@@ -193,6 +192,35 @@ no clipping is applied.
 10. Save the figure in `evidence/`, raw metrics/samples in `artifacts/`, and
     print a PASS/FAIL table.
 
+## Part 4 VERIFY (1): pretrained CIFAR-10 DDPM
+
+1. Download the frozen checkpoint with the pinned command:
+
+   ```sh
+   uv run --with huggingface-hub==1.33.0 hf download google/ddpm-cifar10-32 \
+     config.json diffusion_pytorch_model.safetensors \
+     --revision 267b167dc01f0e4e61923ea244e8b988f84deb80 \
+     --local-dir inputs/cifar-model
+   ```
+
+   The weights must not be committed to Git.
+2. Implement the diffusers v0.40.0 `UNet2DModel` in JAX, load the 328
+   safetensors tensors, and validate every expected parameter shape. Do not
+   retrain.
+3. Generate four RGB `32x32` images with 1000-step DDPM sampling:
+   - float32;
+   - pass model timestep `t-1` for integer reverse step `t`;
+   - no clipping during sampling;
+   - map to display with `clip((x+1)/2, 0, 1)` only.
+4. Visualize reverse diffusion at several noise levels, show all four final
+   images, and compare with real CIFAR-10 images using the Week 6
+   nearest-neighbour gallery conventions/script.
+5. Document what is pretrained (frozen U-Net weights) versus computed during
+   sampling (initial noise, reverse updates, final samples, display mapping).
+6. Check the final image shape, finite outputs, display range, and visual
+   recognizability. Save figures in `evidence/`, raw samples/results in
+   `artifacts/`, and print a PASS/FAIL table.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -208,15 +236,17 @@ no clipping is applied.
     predictor comparison, and PASS/FAIL log;
   - Part 3 learned/exact velocity-field figure, training-loss figure, and
     PASS/FAIL log;
-  - Part 3 VERIFY (2) sampling-step metrics figure and PASS/FAIL log.
+  - Part 3 VERIFY (2) sampling-step metrics figure and PASS/FAIL log;
+  - Part 4 reverse-diffusion, final-sample, generated-vs-real, and Week 6 real
+    CIFAR gallery figures plus PASS/FAIL log.
 - Raw checkpoints, losses, trajectories, samples, velocity grids, sampling
-  metrics, and numerical results in `week7/artifacts/` (ignored by Git).
+  metrics, CIFAR samples, and numerical results in `week7/artifacts/`
+  (ignored by Git).
+- Pinned CIFAR model config in `inputs/cifar-model/`; weights remain ignored.
 
 ## Out of scope
 
-- Part 4 and later tasks.
-- CIFAR-10 diffusion or any high-dimensional image training.
-- Use or modification of the provided `week7/data/` resources.
-
-The provided CIFAR-10 resources are left untouched and are reserved for later
-parts of the exercise.
+- Part 5 and later tasks.
+- CIFAR-10 model training or fine-tuning.
+- Modification of the provided `week7/data/` resources (they are read-only
+  comparison inputs).

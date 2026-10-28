@@ -1,0 +1,24 @@
+Week 7 Part 4 VERIFY (1) -- pretrained CIFAR-10 DDPM
+device: cpu:0
+model: google/ddpm-cifar10-32 @ 267b167dc01f0e4e61923ea244e8b988f84deb80
+config: inputs/cifar-model/config.json
+weights: inputs/cifar-model/diffusion_pytorch_model.safetensors
+parameters: 328 tensors, float32
+samples: 4, reverse steps: 1000, seed: 2026
+sampling ...
+building Week 6 real CIFAR-10 gallery ...
+
+VERIFY (1) checks
+  final shape (4, 32, 32, 3): PASS
+  finite outputs: PASS
+  raw range [-1.0121, 1.0061]
+  display range [0.0000, 1.0000] after (x+1)/2 + clip: PASS
+  recognizable results (manual visual inspection): PASS
+  pretrained: frozen U-Net weights only; no retraining
+  computed at sampling: initial noise, 1000 DDPM updates, final samples, display mapping
+Part 4 VERIFY (1): PASS
+reverse diffusion: evidence/cifar_reverse_diffusion.png
+final images: evidence/cifar_final_samples.png
+generated vs real: evidence/cifar_generated_vs_real.png
+Week 6 real gallery: evidence/cifar10_real_week6_gallery.png
+results: artifacts/cifar_verify1_results.json

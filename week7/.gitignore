@@ -7,3 +7,6 @@ artifacts/
 
 # NOTE: evidence/ is intentionally NOT ignored -- evidence figures, animation,
 # and verification logs are tracked.
+
+# Downloaded pretrained CIFAR-10 DDPM weights (never commit large weights).
+inputs/cifar-model/*.safetensors

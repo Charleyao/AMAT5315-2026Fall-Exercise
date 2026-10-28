@@ -445,6 +445,59 @@ Raw data: `artifacts/verify4_completion.json` (means, SEs, per-image overlaps)
 and `artifacts/verify4_snapshots.npz` (per-chain overlaps and gallery
 snapshots), both gitignored. Run log: `evidence/verify4-summary.txt`.
 
+## Part 3 — VERIFY (1): classical Hopfield network
+
+`hopfield.py` implements the model in JAX and `hopfield_experiment.py` runs
+the storage-load sweep.
+
+- **Model:** `N` spins `±1`; `P` independent random `±1` patterns; Hebbian
+  couplings `J = X^T X / N` (equivalently `X X^T / N` with patterns as
+  columns), explicitly symmetrized and with `J_ii = 0`.
+- **Async zero-temperature recall:** one random spin at a time, sign update,
+  stops when a full sweep causes no flips; `h_i = 0` leaves the spin
+  unchanged.
+- **Unstable bits:** fraction of stored-pattern bits with `xi_i h_i < 0`,
+  compared with the Gaussian prediction `Phi(-1/sqrt(alpha))`.
+- **Sweep:** `N ∈ {100, 200, 400, 800}`, `alpha = P/N` from **0.05 to 0.25**
+  in **0.01** steps, **20 independent pattern sets** per point, seed **5315**.
+
+![Hopfield unstable-bit fraction vs alpha](evidence/hopfield_unstable_fraction.png)
+
+### VERIFY (1) results
+
+Mean absolute deviation from `Phi(-1/sqrt(alpha))` over the 21 alpha values:
+
+| N | mean abs. deviation |
+|---:|--------------------:|
+| 100 | 0.00090 |
+| 200 | 0.00060 |
+| 400 | 0.00026 |
+| 800 | 0.00013 |
+
+Selected points (measured mean ± SE over 20 pattern sets):
+
+| alpha | theory | N=100 | N=200 | N=400 | N=800 |
+|------:|-------:|-------|-------|-------|-------|
+| 0.10 | 0.0008 | 0.0006 ± 0.0004 | 0.0006 ± 0.0001 | 0.0006 ± 0.0001 | 0.0007 ± 0.0000 |
+| 0.15 | 0.0049 | 0.0040 ± 0.0005 | 0.0043 ± 0.0003 | 0.0048 ± 0.0002 | 0.0048 ± 0.0001 |
+| 0.20 | 0.0127 | 0.0116 ± 0.0007 | 0.0112 ± 0.0003 | 0.0125 ± 0.0002 | 0.0123 ± 0.0001 |
+| 0.25 | 0.0228 | 0.0206 ± 0.0010 | 0.0220 ± 0.0005 | 0.0224 ± 0.0002 | 0.0226 ± 0.0001 |
+
+Verification status:
+
+- ✅ `J` is symmetric with zero diagonal (checked exactly).
+- ✅ Stored patterns are independent random `±1` (tested for values, shape and
+  small mutual overlap).
+- ✅ Numerical curves approach the Gaussian prediction as `N` increases;
+  the deviation falls monotonically 0.00090 → 0.00013.
+- ✅ Consistent with the page-13 reference behaviour: at `alpha = 0.25` the
+  `N = 800` curve gives 0.0226 against the theoretical 0.0228, and finite-size
+  deviations are largest for `N = 100`.
+
+Raw numerical data (all means, SEs and per-set values):
+`artifacts/hopfield_unstable_fraction.json` (gitignored). Run log:
+`evidence/hopfield-verify1-summary.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -458,7 +511,8 @@ uv run python verify1_figures.py               # Part 2 VERIFY (1) figures
 uv run python cd_training.py                   # Part 2 VERIFY (2): CD-1 vs CD-10
 uv run python verify3_sampling.py              # Part 2 VERIFY (3): frozen sampling
 uv run python verify4_completion.py            # Part 2 VERIFY (4): completion
-uv run python -m pytest -q                     # 94 tests
+uv run python hopfield_experiment.py           # Part 3 VERIFY (1): alpha sweep
+uv run python -m pytest -q                     # 105 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -475,6 +529,5 @@ after the checksum matches.
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
-  RBM, VERIFY (1) figures, VERIFY (2) CD-1/CD-10 training, VERIFY (3) frozen
-  reconstruction/generation and VERIFY (4) clamped-upper completion. Part 3 is
-  not implemented yet.
+  RBM and VERIFY (1)–(4), and Part 3 VERIFY (1) Hopfield network. Part 3
+  VERIFY (2) and Part 4 are not implemented yet.

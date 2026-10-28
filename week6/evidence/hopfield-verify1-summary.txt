@@ -1,0 +1,17 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+Hopfield unstable-bit fraction: mean absolute deviation from theory
+  N = 100: mean |measured - theory| = 0.00090
+  N = 200: mean |measured - theory| = 0.00060
+  N = 400: mean |measured - theory| = 0.00026
+  N = 800: mean |measured - theory| = 0.00013
+
+Selected points (alpha: theory, measured mean +/- SE)
+  alpha=0.10 theory=0.0008  N=100: 0.0006+/-0.0004  N=200: 0.0006+/-0.0001  N=400: 0.0006+/-0.0001  N=800: 0.0007+/-0.0000
+  alpha=0.15 theory=0.0049  N=100: 0.0040+/-0.0005  N=200: 0.0043+/-0.0003  N=400: 0.0048+/-0.0002  N=800: 0.0048+/-0.0001
+  alpha=0.20 theory=0.0127  N=100: 0.0116+/-0.0007  N=200: 0.0112+/-0.0003  N=400: 0.0125+/-0.0002  N=800: 0.0123+/-0.0001
+  alpha=0.25 theory=0.0228  N=100: 0.0206+/-0.0010  N=200: 0.0220+/-0.0005  N=400: 0.0224+/-0.0002  N=800: 0.0226+/-0.0001
+
+  J symmetric: True; zero diagonal: True
+
+  data:   artifacts/hopfield_unstable_fraction.json
+  figure: evidence/hopfield_unstable_fraction.png

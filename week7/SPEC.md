@@ -1,10 +1,11 @@
-# Week 7 — Parts 1–4 (through Part 4 VERIFY (1))
+# Week 7 — Parts 1–5 (through Part 5 VERIFY (1))
 
 This specification covers **Part 1**, **Part 2 VERIFY (1)**, **Part 3 VERIFY
-(1)–(2)**, and **Part 4 VERIFY (1)**: the Gaussian-mixture forward process, the
-time-conditioned noise predictor, DDPM reverse sampling, VERIFY (1)–(3),
-deterministic DDIM sampling, Flow Matching, the sampling-step comparison, and
-pretrained CIFAR-10 DDPM sampling. Part 5 and later work are out of scope.
+(1)–(2)**, **Part 4 VERIFY (1)**, and **Part 5 VERIFY (1)**: the Gaussian-mixture
+forward process, the time-conditioned noise predictor, DDPM reverse sampling,
+VERIFY (1)–(3), deterministic DDIM sampling, Flow Matching, the sampling-step
+comparison, pretrained CIFAR-10 DDPM sampling, and RePaint. Part 6 and later
+work are out of scope.
 
 ## Data distribution
 
@@ -221,6 +222,26 @@ no clipping is applied.
    recognizability. Save figures in `evidence/`, raw samples/results in
    `artifacts/`, and print a PASS/FAIL table.
 
+## Part 5 VERIFY (1): RePaint inpainting
+
+1. Load the four CIFAR-10 test images from `inputs/images.npz` (the verified
+   Week 7 image bundle).
+2. Implement RePaint Algorithm 6:
+   - hide rows and columns `6:26` in all RGB channels;
+   - use 50 reverse jumps `1000, 980, ..., 20, 0`;
+   - use two attempts per jump except the final jump, for exactly 99 network
+     evaluations;
+   - forward-noise between attempts and replace known pixels with
+     forward-noised observations;
+   - clip only the predicted clean image `x0` to `[-1,1]`.
+3. Generate four completions for each of the four images using seeds `7201`,
+   `7202`, `7203`, `7204`.
+4. Show original, masked image, four completions, and pixelwise variance.
+5. Report hidden-pixel MSE for every completion, verify maximum observed-pixel
+   change `< 1e-5`, and confirm completions differ inside the masked region.
+6. Save figures in `evidence/`, raw results in `artifacts/`, and print a
+   PASS/FAIL table.
+
 ## Deliverables
 
 - Reusable JAX implementation and pytest tests.
@@ -238,15 +259,16 @@ no clipping is applied.
     PASS/FAIL log;
   - Part 3 VERIFY (2) sampling-step metrics figure and PASS/FAIL log;
   - Part 4 reverse-diffusion, final-sample, generated-vs-real, and Week 6 real
-    CIFAR gallery figures plus PASS/FAIL log.
+    CIFAR gallery figures plus PASS/FAIL log;
+  - Part 5 RePaint completion/variance figure and PASS/FAIL log.
 - Raw checkpoints, losses, trajectories, samples, velocity grids, sampling
-  metrics, CIFAR samples, and numerical results in `week7/artifacts/`
-  (ignored by Git).
+  metrics, CIFAR samples, RePaint results, and numerical results in
+  `week7/artifacts/` (ignored by Git).
 - Pinned CIFAR model config in `inputs/cifar-model/`; weights remain ignored.
 
 ## Out of scope
 
-- Part 5 and later tasks.
+- Part 6 and later tasks.
 - CIFAR-10 model training or fine-tuning.
 - Modification of the provided `week7/data/` resources (they are read-only
   comparison inputs).

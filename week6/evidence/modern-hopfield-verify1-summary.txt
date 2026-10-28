@@ -1,0 +1,22 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+Modern Hopfield vs JAX softmax attention
+  tested P: [3, 10, 30, 100, 300, 1000]
+  tested beta: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+  queries: 20 held-out test digits
+  max |manual - attention|: 2.801e-06
+  max |sum(weights) - 1|:   4.768e-07
+  argmax weight == most similar pattern: True
+
+  P = 100, held-out query 0: weight concentration vs beta
+    beta=0.003: top weight=0.0145 at pattern 84, entropy=4.594
+    beta=0.03 : top weight=0.1588 at pattern 84, entropy=3.647
+    beta=0.3  : top weight=0.9985 at pattern 84, entropy=0.011
+
+  [ok] maximum implementation difference < 1e-5
+  [ok] softmax weights sum to 1
+  [ok] larger beta concentrates weight on the most similar pattern
+  [ok] attention uses scale=beta (not the default scale)
+
+  data:   artifacts/modern_hopfield_attention.json
+  figure: evidence/modern_hopfield_weights.png
+elapsed=10.73s

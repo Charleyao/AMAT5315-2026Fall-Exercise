@@ -547,6 +547,56 @@ Verification status:
 Raw data: `artifacts/hopfield_recall_capacity.json` (means, SEs, per-set
 values, crossings; gitignored). Run log: `evidence/hopfield-recall-summary.txt`.
 
+## Part 4 — VERIFY (1): modern Hopfield update as softmax attention
+
+`modern_hopfield.py` stores the first `P` MNIST training images in original
+order as binarized ±1 spins, shape `(P, 784)`, and implements
+
+```
+x_new = X^T @ softmax(beta * (X @ x))
+```
+
+The equivalent JAX attention call uses query `x`, keys = values = stored
+patterns, and an explicit **`scale=beta`** (not the default `1/sqrt(d)`):
+`jax.nn.dot_product_attention(..., scale=beta)`.
+
+Tested grid: `P ∈ {3, 10, 30, 100, 300, 1000}`, `beta ∈ {0.001, 0.003,
+0.01, 0.03, 0.1, 0.3, 1}`, with 20 held-out test images as queries.
+
+![Modern Hopfield softmax weights](evidence/modern_hopfield_weights.png)
+
+### VERIFY (1) results
+
+- Maximum absolute difference between the manual update and JAX softmax
+  attention across **all 20 queries × 6 P × 7 beta**: **2.801 × 10⁻⁶**
+  (< 1 × 10⁻⁵).
+- Maximum `|sum(weights) − 1|`: **4.768 × 10⁻⁷**.
+
+Softmax weights for `P = 100` and one held-out query (label 7):
+
+| beta | top weight | entropy (nats) | argmax pattern |
+|-----:|-----------:|---------------:|---------------:|
+| 0.003 | 0.0145 | 4.594 | 84 |
+| 0.03 | 0.1588 | 3.647 | 84 |
+| 0.3 | 0.9985 | 0.011 | 84 |
+
+Verification status:
+
+- ✅ Maximum implementation difference **< 1e-5** (2.8e-6).
+- ✅ Softmax weights sum to 1 for every query, P and beta.
+- ✅ Larger beta concentrates weight on the **most similar stored pattern**
+  (top weight rises and entropy falls); the argmax always equals the
+  most-similar pattern index.
+- ✅ The attention implementation uses `scale=beta`; a default-scale call
+  differs measurably, so the scale is not accidentally the default.
+- ✅ Consistent with the page-15 behaviour: attention weights are a proper
+  distribution over stored patterns and sharpen toward the best match as beta
+  increases.
+
+Raw data: `artifacts/modern_hopfield_attention.json` (per-point differences,
+weight sums, concentration metrics and plotted weights; gitignored). Run log:
+`evidence/modern-hopfield-verify1-summary.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -562,7 +612,8 @@ uv run python verify3_sampling.py              # Part 2 VERIFY (3): frozen sampl
 uv run python verify4_completion.py            # Part 2 VERIFY (4): completion
 uv run python hopfield_experiment.py           # Part 3 VERIFY (1): alpha sweep
 uv run python hopfield_recall.py               # Part 3 VERIFY (2): capacity
-uv run python -m pytest -q                     # 112 tests
+uv run python modern_hopfield_experiment.py    # Part 4 VERIFY (1): attention
+uv run python -m pytest -q                     # 120 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -579,5 +630,6 @@ after the checksum matches.
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
-  RBM and VERIFY (1)–(4), and Part 3 VERIFY (1)–(2) Hopfield network. Part 4
-  is not implemented yet.
+  RBM and VERIFY (1)–(4), Part 3 Hopfield VERIFY (1)–(2), and Part 4
+  VERIFY (1) modern Hopfield/attention. Part 4 VERIFY (2)–(3) and the final
+  verification are not implemented yet.

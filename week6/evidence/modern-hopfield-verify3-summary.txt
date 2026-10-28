@@ -1,0 +1,26 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+Retrieval success: sign overlap >= 0.95 with nearest stored target
+    P  classical b=0.001 b=0.003 b=0.01  b=0.03  b=0.1   b=0.3   b=1.0  
+    3      0.000  0.000  0.000  1.000  1.000  1.000  1.000  1.000
+   10      0.000  0.000  0.000  0.100  1.000  1.000  1.000  1.000
+   30      0.000  0.000  0.000  0.000  0.830  0.990  1.000  1.000
+  100      0.000  0.000  0.000  0.000  0.170  0.990  1.000  1.000
+  300      0.000  0.000  0.000  0.000  0.030  0.980  1.000  1.000
+ 1000      0.000  0.000  0.000  0.000  0.020  0.950  0.980  0.980
+
+Nearest-target ties (resolved to lowest index):
+  P=   3: 0 tied queries
+  P=  10: 0 tied queries
+  P=  30: 0 tied queries
+  P= 100: 0 tied queries
+  P= 300: 0 tied queries
+  P=1000: 2 tied queries
+
+  [ok] modern beta=0.3 success >= 0.90 for every P
+  [ok] classical success = 0 for every P
+  [ok] success is the per-query fraction with overlap >= 0.95
+  [ok] nearest-target ties resolved to the lowest stored index
+
+  data:    artifacts/modern_hopfield_success.json
+  figure:  evidence/modern_hopfield_success_vs_P.png
+  gallery: evidence/modern_hopfield_success_gallery.png

@@ -160,3 +160,17 @@ def test_full_metrics_and_figure_verify_the_requirements():
     assert cd.CURVES_PATH.is_file()
     assert cd.CURVES_PATH.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert cd.CURVES_PATH.stat().st_size > 10_000
+
+
+def test_checkpoint_roundtrip_is_exact(tmp_path):
+    params = rbm.RBM(
+        W=jnp.array([[0.1, -0.2], [0.3, 0.4]]),
+        a=jnp.array([0.5, -0.6]),
+        b=jnp.array([0.7, -0.8]),
+    )
+    path = cd.save_checkpoint(params, tmp_path / "rbm.npz")
+    loaded = cd.load_checkpoint(path)
+    for name in ("W", "a", "b"):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(loaded, name)), np.asarray(getattr(params, name))
+        )

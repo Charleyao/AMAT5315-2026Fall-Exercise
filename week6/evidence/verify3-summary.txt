@@ -1,0 +1,30 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+
+VERIFY (3) results
+  frozen parameters: {'cd1': True, 'cd10': True}
+  identical initial configurations: True
+  reconstruction MSE (8 held-out digits): {'cd1': 0.0381, 'cd10': 0.0391}
+
+  generation structure (mean over 8 chains):
+    cd1:
+      step    0: ink=0.496  components=  64.6  largest=0.078
+      step    1: ink=0.188  components=  33.8  largest=0.052
+      step   10: ink=0.238  components=   9.8  largest=0.139
+      step  100: ink=0.237  components=   8.6  largest=0.188
+      step 1000: ink=0.227  components=   7.4  largest=0.156
+    cd10:
+      step    0: ink=0.496  components=  64.6  largest=0.078
+      step    1: ink=0.196  components=  24.1  largest=0.103
+      step   10: ink=0.228  components=   6.5  largest=0.205
+      step  100: ink=0.222  components=   9.4  largest=0.184
+      step 1000: ink=0.164  components=   5.0  largest=0.142
+
+  [ok] identical initial random configurations
+  [ok] parameters frozen during reconstruction and generation
+  [ok] ink becomes more connected / largest component grows
+  [ok] 8 chains recorded per snapshot (no best-sample selection)
+
+  results:   artifacts/verify3_sampling.json
+  snapshots: artifacts/verify3_snapshots.npz
+  figure:    evidence/verify3_reconstruction.png
+  figure:    evidence/verify3_generation.png

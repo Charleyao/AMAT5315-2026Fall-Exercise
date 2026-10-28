@@ -48,6 +48,10 @@ ARTIFACTS_DIR = WEEK_DIR / "artifacts"
 EVIDENCE_DIR = WEEK_DIR / "evidence"
 METRICS_PATH = ARTIFACTS_DIR / "cd_training_metrics.json"
 CURVES_PATH = EVIDENCE_DIR / "cd_training_curves.png"
+CHECKPOINT_PATHS = {
+    "cd1": ARTIFACTS_DIR / "rbm_cd1.npz",
+    "cd10": ARTIFACTS_DIR / "rbm_cd10.npz",
+}
 
 CHAIN_LENGTHS = {"cd1": 1, "cd10": 10}
 
@@ -225,6 +229,29 @@ def save_metrics(metrics: dict, path: Path = METRICS_PATH) -> Path:
     return path
 
 
+def save_checkpoint(params: rbm.RBM, path: Path) -> Path:
+    """Save frozen RBM parameters (W, a, b) to an ``.npz`` checkpoint."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        path,
+        W=np.asarray(params.W),
+        a=np.asarray(params.a),
+        b=np.asarray(params.b),
+    )
+    return path
+
+
+def load_checkpoint(path: Path) -> rbm.RBM:
+    """Load RBM parameters saved by :func:`save_checkpoint`."""
+    with np.load(path) as data:
+        return rbm.RBM(
+            W=jnp.asarray(data["W"], dtype=jnp.float32),
+            a=jnp.asarray(data["a"], dtype=jnp.float32),
+            b=jnp.asarray(data["b"], dtype=jnp.float32),
+        )
+
+
 def build_training_curves(metrics: dict):
     """Build the two-panel CD-1 vs CD-10 comparison figure."""
     epochs = metrics["epochs"]
@@ -299,6 +326,10 @@ def main() -> None:
     metrics = build_metrics(config, results, n_test)
     metrics_path = save_metrics(metrics)
     curves_path = save_training_curves(metrics)
+    checkpoint_paths = {
+        name: save_checkpoint(results[name]["params"], CHECKPOINT_PATHS[name])
+        for name in CHAIN_LENGTHS
+    }
 
     print("\nVERIFY (2) results")
     print(f"  evaluation images: {n_test} (first {n_test} test images)")
@@ -335,6 +366,8 @@ def main() -> None:
     print("  [note] the CD surrogate is an approximate objective, not the exact NLL")
     print(f"\n  metrics: {metrics_path.relative_to(WEEK_DIR)}")
     print(f"  figure:  {curves_path.relative_to(WEEK_DIR)}")
+    for name, path in checkpoint_paths.items():
+        print(f"  checkpoint {name}: {path.relative_to(WEEK_DIR)}")
 
 
 if __name__ == "__main__":

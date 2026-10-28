@@ -334,6 +334,64 @@ Verification status:
 Raw per-epoch metrics are written to `artifacts/cd_training_metrics.json`
 (gitignored); the run log is `evidence/cd-training-verify.txt`.
 
+## Part 2 — VERIFY (3): frozen reconstruction and fresh generation
+
+`verify3_sampling.py` reuses the trained models. Parameters are loaded from
+the checkpoints `artifacts/rbm_cd1.npz` and `artifacts/rbm_cd10.npz` (if a
+checkpoint is missing, the script deterministically retrains with the exact
+`rbm.toml` settings and saves it). **Parameters are frozen** during both
+experiments: sampling only reads `W`, `a`, `b`.
+
+- **Reconstruction:** one Gibbs step from the first 8 held-out test digits
+  (fixed evaluation key, seed 6606): `h ~ P(h|v0)`, `v1 ~ P(v|h)`.
+- **Fresh generation:** both models start from the *same* random ±1 spin
+  configurations (8 chains, seed 6607), converted to visible bits
+  `v = (s+1)/2`, and use the *same* per-step sampling keys. Visible states are
+  recorded at steps **0, 1, 10, 100, 1000**. All 8 chains are shown; no best
+  sample is selected.
+
+![One-step reconstruction, CD-1 vs CD-10](evidence/verify3_reconstruction.png)
+
+![Fresh generation from identical spins, CD-1 vs CD-10](evidence/verify3_generation.png)
+
+### VERIFY (3) results
+
+Reconstruction MSE over the 8 held-out digits: **CD-1 0.0381**, **CD-10
+0.0391** (both models reconstruct the strokes of the inputs).
+
+Generation structure, mean over 8 chains (ink fraction / 4-connected ink
+components / largest-component fraction):
+
+| step | CD-1 | CD-10 |
+|-----:|------|-------|
+| 0    | 0.496 / 64.6 / 0.078 | 0.496 / 64.6 / 0.078 |
+| 1    | 0.188 / 33.8 / 0.052 | 0.196 / 24.1 / 0.103 |
+| 10   | 0.238 / 9.8 / 0.139  | 0.228 / 6.5 / 0.205  |
+| 100  | 0.237 / 8.6 / 0.188  | 0.222 / 9.4 / 0.184  |
+| 1000 | 0.227 / 7.4 / 0.156  | 0.164 / 5.0 / 0.142  |
+
+**Effects of step count vs training k.** The number of Gibbs steps dominates:
+for both models the random ±1 start (half the pixels on, ~65 disconnected
+components) collapses within 10–100 steps into ~5–10 connected ink components
+and a much larger largest blob, i.e. stroke-like structure rather than pixel
+noise. Longer CD training helps early mixing modestly — CD-10 already has
+fewer components and a larger blob after 1–10 steps — but by 1000 steps the
+two models produce samples of comparable structure. Clean, recognizable
+digits are not required and are not claimed.
+
+Verification status:
+
+- ✅ Both models start from **identical** random ±1 configurations (and use
+  matched sampling noise).
+- ✅ Model parameters are **frozen** during reconstruction and generation.
+- ✅ Generated images develop **connected, stroke-like** ink structure
+  (components fall, largest component grows).
+- ✅ 8 chains recorded at every snapshot; no cherry-picking.
+
+Raw results: `artifacts/verify3_sampling.json` and
+`artifacts/verify3_snapshots.npz` (gitignored). Run log:
+`evidence/verify3-summary.txt`.
+
 ## How to reproduce
 
 ```sh
@@ -345,7 +403,8 @@ uv run python plot_cifar10_distribution.py     # Part 1 VERIFY (2) figure
 uv run python rbm.py                           # RBM basics + finite checks
 uv run python verify1_figures.py               # Part 2 VERIFY (1) figures
 uv run python cd_training.py                   # Part 2 VERIFY (2): CD-1 vs CD-10
-uv run python -m pytest -q                     # 73 tests
+uv run python verify3_sampling.py              # Part 2 VERIFY (3): frozen sampling
+uv run python -m pytest -q                     # 85 tests
 ```
 
 `prepare_data.py` is idempotent: files that already exist with the correct MD5
@@ -362,5 +421,6 @@ after the checksum matches.
   host through a public DNS server while keeping the original hostname for TLS
   (SNI and certificate validation are unchanged).
 - Scope: Part 1 dataset preparation and distribution figures, Part 2 basic
-  RBM, VERIFY (1) figures and VERIFY (2) CD-1/CD-10 training. VERIFY (3),
-  VERIFY (4) and Part 3 are not implemented yet.
+  RBM, VERIFY (1) figures, VERIFY (2) CD-1/CD-10 training and VERIFY (3)
+  frozen reconstruction/generation. VERIFY (4) and Part 3 are not implemented
+  yet.
